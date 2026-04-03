@@ -1,4 +1,7 @@
-import Image from "next/image";
+"Use client";
+import { Check, Menu, X } from 'lucide-react';
+import { useState } from 'react';
+import heroImage from 'figma:asset/ad3a609195a918cffbe243ae0e4cc43e0587c7c3.png';
 
 export default function Home() {
   return (
