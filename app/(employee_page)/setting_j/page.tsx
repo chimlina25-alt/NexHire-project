@@ -112,10 +112,11 @@ const tabs = [
       </div>
 
       {/* RIGHT SIDE */}
-      <button className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-xl font-semibold transition self-start">
-        Sign Out
-      </button>
-
+      <Link href="/login">
+        <button className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-xl font-semibold transition self-start">
+          Sign Out
+        </button>
+      </Link>
     </div>
   </div>
 

@@ -1,8 +1,17 @@
-import React from 'react';
-import { Settings, Check, Mail, BarChart2, Layers, Briefcase, FileText } from 'lucide-react';
+"use client";
+import React, { useState } from 'react';
+import { Settings, Check, Mail, BarChart2, Layers, Briefcase, FileText, X } from 'lucide-react';
 import Link from 'next/link';
 
 const SubscriptionPlans = () => {
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+
+  const handleSubscribeClick = (planName: string) => {
+    setSelectedPlan(planName);
+    setShowPaymentModal(true);
+  };
+
   const plans = [
     {
       name: 'Normal (Free)',
@@ -52,23 +61,14 @@ const SubscriptionPlans = () => {
           <span className="text-xl font-bold tracking-tight">NexHire</span>
         </div>
         
-       <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-           <Link href="/dashboard">
-             <button className="hover:text-gray-300 transition-colors">Dashboard</button>
-           </Link>
-          <Link href="/post_job">
-            <button className="hover:text-gray-300 transition-colors">Post Job</button>
-          </Link>
-          <Link href="/message_er">
-            <button className="hover:text-gray-300 transition-colors">Messages</button>
-          </Link>
-          <Link href="/subscription">
-            <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Subscription</button>
-          </Link>
-          <Link href="/notification">
-            <button className="hover:text-gray-300 transition-colors">Notification</button>
-          </Link>
+        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+          <Link href="/dashboard"><button className="hover:text-gray-300 transition-colors">Dashboard</button></Link>
+          <Link href="/post_job"><button className="hover:text-gray-300 transition-colors">Post Job</button></Link>
+          <Link href="/message_er"><button className="hover:text-gray-300 transition-colors">Messages</button></Link>
+          <Link href="/subscription"><button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Subscription</button></Link>
+          <Link href="/notification"><button className="hover:text-gray-300 transition-colors">Notification</button></Link>
         </nav>
+
         <div className="flex items-center gap-4">
           <div className="text-right">
             <Link href="/profile">
@@ -100,9 +100,7 @@ const SubscriptionPlans = () => {
                 <span className="text-gray-400 font-medium">/ month</span>
               </div>
 
-              <p className="text-gray-600 text-sm leading-relaxed mb-8 h-12">
-                {plan.description}
-              </p>
+              <p className="text-gray-600 text-sm leading-relaxed mb-8 h-12">{plan.description}</p>
 
               {plan.highlight && (
                 <div className="w-full bg-[#00a37b] text-white py-2 rounded-lg font-bold text-sm mb-6">
@@ -119,7 +117,9 @@ const SubscriptionPlans = () => {
                 ))}
               </div>
 
-              <button className={`w-full py-4 rounded-full font-bold transition-all ${
+              <button 
+                onClick={() => plan.price !== '0' ? handleSubscribeClick(plan.name) : null}
+                className={`w-full py-4 rounded-full font-bold transition-all ${
                 plan.buttonVariant === 'primary' 
                 ? 'bg-[#153a30] text-white hover:bg-[#0d2a23]' 
                 : 'bg-[#f1fcf9] text-[#153a30] border border-[#e4f6f1] hover:bg-[#e4f6f1]'
@@ -130,6 +130,71 @@ const SubscriptionPlans = () => {
           ))}
         </div>
       </main>
+
+      {/* PAYMENT MODAL */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[30px] p-8 relative animate-in fade-in zoom-in duration-300">
+            <button 
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-600"
+            >
+              <X size={24} />
+            </button>
+
+            <h2 className="text-2xl font-bold text-center mb-2">Checkout</h2>
+            <p className="text-gray-500 text-center mb-8 text-sm">
+              Complete your subscription for <span className="font-bold text-[#153a30]">{selectedPlan}</span>
+            </p>
+
+            <div className="space-y-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Select Payment Method</p>
+              
+              {/* ABA BANK OPTION */}
+              <button className="w-full flex items-center justify-between p-4 border-2 border-gray-100 rounded-2xl hover:border-[#40b594] hover:bg-[#f1fcf9] transition-all group">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#005a84] rounded-xl flex items-center justify-center overflow-hidden">
+                    {/* Replace with actual ABA logo path */}
+                    <span className="text-white font-black text-xs">ABA</span>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-gray-800">ABA Bank</p>
+                    <p className="text-xs text-gray-400">Pay via ABA Mobile App</p>
+                  </div>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-gray-200 group-hover:border-[#40b594] flex items-center justify-center">
+                    <div className="w-3 h-3 bg-[#40b594] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+              </button>
+
+              {/* ACLEDA BANK OPTION */}
+              <button className="w-full flex items-center justify-between p-4 border-2 border-gray-100 rounded-2xl hover:border-[#40b594] hover:bg-[#f1fcf9] transition-all group">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#f9a11b] rounded-xl flex items-center justify-center overflow-hidden">
+                    {/* Replace with actual ACLEDA logo path */}
+                    <span className="text-white font-black text-[10px]">ACLEDA</span>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-gray-800">ACLEDA Bank</p>
+                    <p className="text-xs text-gray-400">Pay via ACLEDA Mobile</p>
+                  </div>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-gray-200 group-hover:border-[#40b594] flex items-center justify-center">
+                    <div className="w-3 h-3 bg-[#40b594] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+              </button>
+            </div>
+
+            <button className="w-full bg-[#153a30] text-white py-4 rounded-2xl font-bold mt-8 hover:bg-[#0d2a23] transition-all">
+              Proceed to Payment
+            </button>
+            
+            <p className="text-center text-[10px] text-gray-400 mt-4">
+              Secure encrypted payment powered by NexHire Pay
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

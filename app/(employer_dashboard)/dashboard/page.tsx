@@ -5,18 +5,14 @@ import { LayoutDashboard, Users, Settings, Plus, Eye, FileText } from 'lucide-re
 import Link from 'next/link';
 
 const EmployerDashboard = () => {
+  const applicantsRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ Scroll target
-const applicantsRef = useRef<HTMLDivElement | null>(null);
-
-  // ✅ Scroll function
   const handleScrollToApplicants = () => {
     applicantsRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
-
       {/* HEADER NAVIGATION */}
       <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -25,21 +21,11 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
         </div>
         
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">
-            Dashboard
-          </button>
-          <Link href="/post_job">
-             <button className="hover:text-gray-300 transition-colors">Post Job</button>
-           </Link> 
-           <Link href="/message_er">
-          <button className="hover:text-gray-300 transition-colors">Messages</button>
-          </Link>
-          <Link href="/subscription">
-            <button className="hover:text-gray-300 transition-colors">Subscription</button>
-          </Link>
-          <Link href="/notification">
-          <button className="hover:text-gray-300 transition-colors">Notification</button>
-         </Link>
+          <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Dashboard</button>
+          <Link href="/post_job"><button className="hover:text-gray-300 transition-colors">Post Job</button></Link> 
+          <Link href="/message_er"><button className="hover:text-gray-300 transition-colors">Messages</button></Link>
+          <Link href="/subscription"><button className="hover:text-gray-300 transition-colors">Subscription</button></Link>
+          <Link href="/notification"><button className="hover:text-gray-300 transition-colors">Notification</button></Link>
         </nav>
 
         <div className="flex items-center gap-4">
@@ -59,9 +45,7 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
       <main className="max-w-7xl mx-auto p-8 md:p-12">
         <h1 className="text-4xl font-bold text-[#1a1a1a] mb-10">Welcome Company1 !</h1>
 
-        {/* WHITE MAIN CONTAINER */}
         <div className="bg-white rounded-[35px] shadow-sm border border-gray-100 p-8 md:p-12">
-          
           {/* SUMMARY STATS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
             <div className="bg-[#eef7f6] p-10 rounded-[20px] flex flex-col items-center">
@@ -92,9 +76,7 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
             </div>
           </div>
 
-          {/* TOP SECTION */}
           <div className="flex flex-col lg:flex-row gap-12 mb-16">
-
             {/* RECENT JOBS */}
             <div className="lg:w-2/3">
               <h2 className="text-2xl font-bold mb-8">Recent Jobs</h2>
@@ -106,17 +88,14 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
                       <th className="pb-4 font-semibold">Category</th>
                       <th className="pb-4 font-semibold">Location</th>
                       <th className="pb-4 font-semibold">Status</th>
-                      <th className="pb-4 font-semibold">Applicants</th>
+                      <th className="pb-4 font-semibold text-center">Applicants</th>
                     </tr>
                   </thead>
-
                   <tbody className="text-sm">
                     {[
                       { title: 'Frontend Developer', cat: 'IT & Software', loc: 'Phnom Penh', status: 'Active', count: 12 },
                       { title: 'UI/UX Designer', cat: 'Design', loc: 'Remote', status: 'Active', count: 8 },
                       { title: 'Marketing Specialist', cat: 'Marketing', loc: 'Phnom Penh', status: 'Closed', count: 7 },
-                      { title: 'Sales Executive', cat: 'Sales', loc: 'Siem Reap', status: 'Active', count: 5 },
-                      { title: 'Data Analyst', cat: 'IT & Software', loc: 'Hybrid', status: 'Draft', count: 0 },
                     ].map((job, idx) => (
                       <tr key={idx} className="border-b border-gray-50 last:border-0">
                         <td className="py-5 font-medium text-gray-700">{job.title}</td>
@@ -124,8 +103,7 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
                         <td className="py-5 text-gray-500">{job.loc}</td>
                         <td className="py-5">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            job.status === 'Active' ? 'bg-green-100 text-green-600' : 
-                            job.status === 'Closed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+                            job.status === 'Active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                           }`}>
                             {job.status}
                           </span>
@@ -134,7 +112,6 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
                       </tr>
                     ))}
                   </tbody>
-
                 </table>
               </div>
             </div>
@@ -143,7 +120,6 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
             <div className="lg:w-1/3">
               <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm sticky top-8">
                 <h2 className="text-2xl font-bold mb-8">Quick Actions</h2>
-
                 <div className="flex flex-col gap-5">
                   <Link href="/post_job">
                     <button className="w-full bg-[#153a30] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-[#0d2a23] transition-all">
@@ -151,29 +127,25 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
                     </button>
                   </Link>
 
-                  {/* ✅ SCROLL BUTTON */}
-                  <button 
-                    onClick={handleScrollToApplicants}
-                    className="w-full border border-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 "
-                  >
+                  <button onClick={handleScrollToApplicants} className="w-full border border-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 ">
                     <Eye size={22} /> View Applicants
                   </button>
 
-                  <button className="w-full border border-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50">
-                    <FileText size={22} /> Draft
-                  </button>
+                  {/* FIXED: Link to Drafts Tab */}
+                  <Link href="/post_job?tab=drafts" className="w-full">
+                    <button className="w-full border border-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50">
+                      <FileText size={22} /> Draft
+                    </button>
+                  </Link>
                 </div>
               </div>
             </div>
-
           </div>
 
           <hr className="border-gray-100 mb-12" />
 
-          {/* ✅ TARGET SECTION */}
           <section ref={applicantsRef} className="w-full">
             <h2 className="text-2xl font-bold mb-8">Recent Applicants</h2>
-
             <div className="overflow-x-auto border border-gray-100 rounded-[30px] p-6">
               <table className="w-full text-left">
                 <tbody>
@@ -193,7 +165,6 @@ const applicantsRef = useRef<HTMLDivElement | null>(null);
               </table>
             </div>
           </section>
-
         </div>
       </main>
     </div>

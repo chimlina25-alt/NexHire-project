@@ -32,7 +32,7 @@ export default function App() {
             </nav>
 
             <div className="hidden md:flex items-center gap-4">
-              <Link href="/log_in">
+              <Link href="/login">
                 <button className="px-5 py-2 text-gray-700 font-semibold">Sign In</button>
               </Link>
               <Link href="/home_page">

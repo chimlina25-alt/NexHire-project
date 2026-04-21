@@ -1,11 +1,20 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Search, Clock, FileEdit, Trash2, ChevronRight, Briefcase, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 const PostJob = () => {
-  // State to switch between the Form and the Drafts List
+  // Logic to handle tab switching from Dashboard
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'post' | 'drafts'>('post');
+
+  useEffect(() => {
+    if (tabParam === 'drafts') {
+      setActiveTab('drafts');
+    }
+  }, [tabParam]);
 
   const draftData = [
     { id: 1, title: 'Senior UX Designer', category: 'Design', lastSaved: '2 hours ago' },
@@ -14,7 +23,7 @@ const PostJob = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
-      {/* HEADER NAVIGATION - UNCHANGED */}
+      {/* HEADER NAVIGATION */}
       <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
@@ -52,7 +61,6 @@ const PostJob = () => {
       </header>
 
       <main className="max-w-7xl mx-auto p-8">
-        {/* TAB SWITCHER */}
         {/* SUB-NAVIGATION TOGGLE */}
         <div className="flex items-center gap-6 mb-8 border-b border-gray-200">
           <button
@@ -68,8 +76,9 @@ const PostJob = () => {
             Drafts ({draftData.length})
           </button>
         </div>
+
         {activeTab === 'post' ? (
-          /* YOUR ORIGINAL POST JOB CODE START */
+          /* RESTORED ORIGINAL DESIGN */
           <div className="flex flex-col lg:flex-row gap-8">
             <div className="lg:w-2/3 space-y-8">
               <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
@@ -169,9 +178,8 @@ const PostJob = () => {
               </section>
             </div>
           </div>
-          /* YOUR ORIGINAL POST JOB CODE END */
         ) : (
-          /* --- DRAFTS STACK VIEW --- */
+          /* DRAFTS VIEW */
           <div className="max-w-4xl animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-lg font-bold text-gray-500 uppercase tracking-widest">Unfinished Stack</h2>
