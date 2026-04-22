@@ -11,10 +11,10 @@ interface SidebarItem {
 import { 
   LayoutDashboard, Users, Building2, FileText, 
   CreditCard, Radio, MessageSquare, LogOut,
-  Search, ListFilter
+  Search, ListFilter, Plus, Minus
 } from 'lucide-react';
 
-const ManageUsers = () => {
+const ManageSubscriptions = () => {
   const pathname = usePathname();
 
   const sidebarItems: SidebarItem[] = [
@@ -24,13 +24,13 @@ const ManageUsers = () => {
     { name: 'Job Posts', icon: <FileText size={20} />, href: '/admin_job_posts' },
     { name: 'Subscription', icon: <CreditCard size={20} />, href: '/admin_subscription' },
     { name: 'Broadcast', icon: <Radio size={20} />, href: '/admin_broadcast' },
-    { name: 'Messages', icon: <MessageSquare size={20} />, href: '/admin_message' },
+    { name: 'Messages', icon: <MessageSquare size={20} />, href: '/message_ad' },
   ];
 
-  const userData = [
-    { name: 'John Son', status: 'Active', forms: '12 forms', joined: 'Jan 14, 2026' },
-    { name: 'Jeff Byers', status: 'In active', forms: '5 forms', joined: 'Jan 5, 2026' },
-    { name: 'Jay Thomas', status: 'Active', forms: '2 forms', joined: 'Jan 2, 2026' },
+  const subscriptionData = [
+    { user: 'Coffee Corner', posts: '2 posts', type: 'Premium' },
+    { user: "Mike's Bakery", posts: '1 posts', type: 'Premium' },
+    { user: 'Spendly', posts: '3 posts', type: 'Standard' },
   ];
 
   return (
@@ -38,8 +38,8 @@ const ManageUsers = () => {
       {/* SIDEBAR */}
       <aside className="w-72 bg-[#f1fcf9] border-r border-gray-100 flex flex-col p-8 fixed h-full">
         <div className="flex items-center gap-3 mb-12 ml-2">
-          <div className="w-10 h-10  rounded-full flex items-center justify-center">
-            <img src="/logo.png" alt="" />
+          <div className="w-10 h-10bg-[#153a30] rounded-full flex items-center justify-center">
+             <img src="/logo.png" alt="NexHire" />
           </div>
           <span className="text-2xl font-black text-[#153a30] tracking-tight">NexHire</span>
         </div>
@@ -84,8 +84,8 @@ const ManageUsers = () => {
       {/* MAIN CONTENT */}
       <main className="flex-1 ml-72 p-12">
         <div className="mb-10">
-          <h1 className="text-4xl font-extrabold text-[#1a1a1a] mb-1">Manage Users</h1>
-          <p className="text-gray-400 font-bold tracking-wide uppercase text-sm">Apr 28, 2026</p>
+          <h1 className="text-4xl font-extrabold text-[#1a1a1a] mb-1">Subscriptions</h1>
+          <p className="text-gray-400 font-bold tracking-wide text-sm">Apr 28, 2026</p>
         </div>
 
         {/* TABLE CONTAINER */}
@@ -100,42 +100,46 @@ const ManageUsers = () => {
             />
           </div>
 
-          {/* USERS TABLE */}
+          {/* SUBSCRIPTION TABLE */}
           <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-y-4">
+            <table className="w-full border-separate border-spacing-y-6">
               <thead>
-                <tr className="text-left text-xs font-black text-[#1a1a1a] uppercase tracking-wider">
+                <tr className="text-left text-[10px] font-black text-[#1a1a1a] uppercase tracking-[0.1em]">
                   <th className="px-6 pb-2">Management</th>
-                  <th className="px-6 pb-2">Name</th>
-                  <th className="px-6 pb-2">Status</th>
-                  <th className="px-6 pb-2">Form Apply</th>
-                  <th className="px-6 pb-2">Joined</th>
+                  <th className="px-6 pb-2 text-center">User</th>
+                  <th className="px-6 pb-2 text-center">Post available</th>
+                  <th className="px-6 pb-2 text-center">Subscription Type</th>
+                  <th className="px-6 pb-2 text-right">Post</th>
                 </tr>
               </thead>
               <tbody>
-                {userData.map((user, index) => (
-                  <tr key={index} className="group border-b border-gray-50 last:border-none">
+                {subscriptionData.map((sub, index) => (
+                  <tr key={index} className="group">
                     <td className="px-6 py-4">
                       <button className="p-2 text-gray-400 hover:text-[#153a30] transition-colors">
                         <ListFilter size={20} />
                       </button>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="font-extrabold text-[#1a1a1a] text-sm">{user.name}</span>
+                    <td className="px-6 py-4 text-center">
+                      <span className="font-extrabold text-[#1a1a1a] text-sm">{sub.user}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          user.status === 'Active' ? 'bg-[#00ffa3]' : 'bg-gray-300'
-                        }`} />
-                        <span className="text-[10px] font-bold text-gray-600">{user.status}</span>
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-xs font-bold text-gray-600">{sub.posts}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-[10px] font-black text-gray-400 uppercase italic">
+                        {sub.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors">
+                          <Minus size={12} strokeWidth={3} />
+                        </button>
+                        <button className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors">
+                          <Plus size={12} strokeWidth={3} />
+                        </button>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs font-bold text-gray-400">{user.forms}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs font-bold text-gray-400">{user.joined}</span>
                     </td>
                   </tr>
                 ))}
@@ -148,4 +152,4 @@ const ManageUsers = () => {
   );
 };
 
-export default ManageUsers;
+export default ManageSubscriptions;

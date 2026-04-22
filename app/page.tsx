@@ -32,10 +32,10 @@ export default function App() {
             </nav>
 
             <div className="hidden md:flex items-center gap-4">
-              <Link href="/log_in">
+              <Link href="/login">
                 <button className="px-5 py-2 text-gray-700 font-semibold">Sign In</button>
               </Link>
-              <Link href="/home_page">
+              <Link href="/signup">
               <button className="px-6 py-2.5 bg-[#0d9488] text-white rounded-full font-semibold shadow-md">
                 Get Started
               </button>
@@ -277,7 +277,7 @@ export default function App() {
             <div className="w-16 h-1.5 bg-[#1f4e3d] mx-auto mb-16 rounded-full opacity-60"></div>
             <h2 className="text-5xl font-bold text-[#1f4e3d] mb-6">Ready to start your career journey?</h2>
             <p className="text-gray-500 text-lg mb-12">Find internships, apply easily, or post job openings in just a few steps.</p>
-             <Link href="/home_page">
+             <Link href="/signup">
             <button className="group inline-flex items-center gap-3 px-12 py-4 font-bold text-white bg-gradient-to-r from-[#1f4e3d] to-[#3db28c] rounded-xl hover:scale-105 transition-all shadow-lg">
               Get Started <MoveRight className="transition-transform group-hover:translate-x-1" />
             </button>

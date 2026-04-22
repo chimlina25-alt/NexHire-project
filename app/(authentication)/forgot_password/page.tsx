@@ -39,7 +39,7 @@ const ForgotPasswordPage = () => {
 
               <div className="absolute bottom-7 left-7">
                 <Link
-                  href="/log_in"
+                  href="/login"
                   className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/20 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition-all hover:bg-white hover:text-black"
                 >
                   <ArrowLeft size={15} />
@@ -94,7 +94,7 @@ const ForgotPasswordPage = () => {
               <p className="mt-5 text-center text-sm text-gray-400">
                 Remember your password?{" "}
                 <Link
-                  href="/log_in"
+                  href="/login"
                   className="font-semibold text-[#00a37b] hover:underline"
                 >
                   Sign in

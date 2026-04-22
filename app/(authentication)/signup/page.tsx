@@ -68,7 +68,7 @@ export default function SignUpPage() {
 
               <div className="absolute bottom-7 left-7">
                 <Link
-                  href="/log_in"
+                  href="/login"
                   className="inline-block rounded-full border border-white/50 bg-black/30 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition-all hover:bg-white hover:text-black"
                 >
                   Sign In
@@ -138,7 +138,7 @@ export default function SignUpPage() {
               <p className="mt-6 text-center text-sm text-gray-500">
                 Already have an account?{" "}
                 <Link
-                  href="/log_in"
+                  href="/login"
                   className="font-semibold text-[#00a37b] hover:underline"
                 >
                   Sign in

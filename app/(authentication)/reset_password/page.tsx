@@ -60,7 +60,7 @@ const ForgotPasswordPage = () => {
               </div>
 
               <Link
-                href="/log_in"
+                href="/login"
                 className="inline-flex w-full items-center justify-center rounded-lg bg-[#00a37b] py-3 text-sm font-semibold text-white shadow-md shadow-[#00a37b]/20 transition-all hover:bg-[#008f6c]"
               >
                 Return to login

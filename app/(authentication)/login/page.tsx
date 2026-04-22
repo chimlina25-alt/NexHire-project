@@ -64,7 +64,7 @@ export default function LoginPage() {
               {/* Sign Up button */}
               <div className="absolute bottom-7 left-7">
                 <Link
-                  href="/sign_up"
+                  href="/signup"
                   className="inline-block rounded-full border border-white/50 bg-black/30 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition-all hover:bg-white hover:text-black"
                 >
                   Sign Up
@@ -106,7 +106,7 @@ export default function LoginPage() {
                   />
                   <div className="text-right">
                     <Link
-                      href="/forget_pw"
+                      href="/forgot_password"
                       className="text-xs font-semibold text-[#00a37b] hover:underline"
                     >
                       Forgot password?
@@ -140,7 +140,7 @@ export default function LoginPage() {
               <p className="mt-6 text-center text-sm text-gray-500">
                 Don&apos;t have an account?{" "}
                 <Link
-                  href="/sign_up"
+                  href="/signup"
                   className="font-semibold text-[#00a37b] hover:underline"
                 >
                   Sign up

@@ -18,13 +18,13 @@ const JobStation = () => {
   const pathname = usePathname();
 
   const sidebarItems: SidebarItem[] = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard_ad' },
-    { name: 'Manage Users', icon: <Users size={20} />, href: '/manage_user' },
-    { name: 'Employers', icon: <Building2 size={20} />, href: '/employer_ad' },
-    { name: 'Job Posts', icon: <FileText size={20} />, href: '/job_station' },
-    { name: 'Subscription', icon: <CreditCard size={20} />, href: '/subscription_ad' },
-    { name: 'Broadcast', icon: <Radio size={20} />, href: '/broadcast' },
-    { name: 'Messages', icon: <MessageSquare size={20} />, href: '/message_ad' },
+    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/admin_dashboard' },
+    { name: 'Manage Users', icon: <Users size={20} />, href: '/admin_users' },
+    { name: 'Employers', icon: <Building2 size={20} />, href: '/admin_employers' },
+    { name: 'Job Posts', icon: <FileText size={20} />, href: '/admin_job_posts' },
+    { name: 'Subscription', icon: <CreditCard size={20} />, href: '/admin_subscription' },
+    { name: 'Broadcast', icon: <Radio size={20} />, href: '/admin_broadcast' },
+    { name: 'Messages', icon: <MessageSquare size={20} />, href: '/admin_message' },
   ];
 
   const jobPosts = [
