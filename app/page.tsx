@@ -24,9 +24,8 @@ export default function App() {
               <span className="font-bold text-2xl text-[#1f4e3d]">NexHire</span>
             </div>
 
-            <nav className="hidden md:flex items-center gap-10">
+            <nav className="hidden md:flex items-center gap-15">
               <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">Home</a>
-              <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">Companies</a>
               <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">Pricing</a>
               <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">About Us</a>
             </nav>
