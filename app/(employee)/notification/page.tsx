@@ -48,7 +48,7 @@ const NotificationsInterviews = () => {
           <Link href="/notification">
             <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Notification</button>
           </Link>
-          <Link href="/my_profile">
+          <Link href="/setting">
           <button className="hover:text-gray-300 transition-colors">Settings</button>
           </Link>
         </nav>

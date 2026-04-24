@@ -85,7 +85,7 @@ const Notifications = () => {
           <Link href="/subscription">
             <button className="text-gray-300 hover:text-white transition-colors">Subscription</button>
           </Link>
-          <Link href="/setting">
+          <Link href="/employer_setting">
             <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
           </Link>
         </nav>

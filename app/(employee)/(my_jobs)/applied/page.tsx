@@ -49,7 +49,7 @@ const pathname = usePathname();
           <Link href="/notification">
             <button className="hover:text-gray-300 transition-colors">Notification</button>
           </Link>
-          <Link href="/my_profile">
+          <Link href="/setting">
           <button className="hover:text-gray-300 transition-colors">Settings</button>
           </Link>
         </nav>

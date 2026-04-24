@@ -1,8 +1,94 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Clock, FileEdit, Trash2, Briefcase, PlusCircle, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
+
+const categoryOptions = [
+  'IT & Software', 'Design', 'Marketing', 'Sales', 'Finance',
+  'Human Resources', 'Engineering', 'Customer Support', 'Operations', 'Legal',
+];
+
+const locationOptions = [
+  'Phnom Penh', 'Siem Reap', 'Battambang', 'Sihanoukville', 'Kampot',
+  'Kandal', 'Takeo', 'Remote', 'Other',
+];
+
+function Combobox({
+  placeholder,
+  options,
+  inputClass,
+}: {
+  placeholder: string;
+  options: string[];
+  inputClass: string;
+}) {
+  const [value, setValue] = useState('');
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = options.filter((o) =>
+    o.toLowerCase().includes(value.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        className={`${inputClass} pr-10`}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setOpen(true);
+          setFocused(true);
+        }}
+      />
+      <ChevronDown
+        size={16}
+        className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#6b7f79] pointer-events-none transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {filtered.map((option) => (
+            <li
+              key={option}
+              onMouseDown={() => {
+                setValue(option);
+                setOpen(false);
+              }}
+              className={`px-4 py-2.5 text-sm font-medium text-[#071a15] cursor-pointer transition-colors hover:bg-[#f0f9f6] hover:text-[#40b594] ${
+                value === option ? 'bg-[#f0f9f6] text-[#40b594] font-bold' : ''
+              }`}
+            >
+              {option}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && filtered.length === 0 && value.length > 0 && (
+        <div className="absolute z-50 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm text-[#6b7f79] font-medium">
+          No matches — press Enter to use "{value}"
+        </div>
+      )}
+    </div>
+  );
+}
 
 const PostJob = () => {
   const [activeTab, setActiveTab] = useState<'post' | 'drafts'>('post');
@@ -44,7 +130,7 @@ const PostJob = () => {
           <Link href="/subscription">
             <button className="text-gray-300 hover:text-white transition-colors">Subscription</button>
           </Link>
-          <Link href="/setting">
+          <Link href="/employer_setting">
             <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
           </Link>
         </nav>
@@ -105,30 +191,28 @@ const PostJob = () => {
                     <input type="text" placeholder="e.g. Senior Frontend Developer" className={inputClass} />
                   </div>
 
-                  <div className="relative">
+                  {/* ── COMBOBOX: Job Category ── */}
+                  <div>
                     <label className={labelClass}>Job Category <span className="text-red-500">*</span></label>
-                    <select className={selectClass}>
-                      <option value="">Select a category</option>
-                      <option>IT & Software</option>
-                      <option>Design</option>
-                      <option>Marketing</option>
-                      <option>Sales</option>
-                      <option>Finance</option>
-                    </select>
-                    <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
+                    <Combobox
+                      placeholder="e.g. Design, Marketing, IT & Software"
+                      options={categoryOptions}
+                      inputClass={inputClass}
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="relative">
+
+                    {/* ── COMBOBOX: Location ── */}
+                    <div>
                       <label className={labelClass}>Location <span className="text-red-500">*</span></label>
-                      <select className={selectClass}>
-                        <option>Phnom Penh</option>
-                        <option>Siem Reap</option>
-                        <option>Remote</option>
-                        <option>Other</option>
-                      </select>
-                      <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
+                      <Combobox
+                        placeholder="e.g. Phnom Penh, Remote"
+                        options={locationOptions}
+                        inputClass={inputClass}
+                      />
                     </div>
+
                     <div className="relative">
                       <label className={labelClass}>Work Arrangement</label>
                       <select className={selectClass}>

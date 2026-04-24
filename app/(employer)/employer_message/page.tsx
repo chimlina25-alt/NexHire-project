@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Search, Paperclip, Send, Phone, Video, MoreHorizontal } from 'lucide-react';
+import { Search, Paperclip, Send } from 'lucide-react';
 import Link from 'next/link';
 
 const Messages = () => {
@@ -9,16 +9,30 @@ const Messages = () => {
   const [message, setMessage] = useState('');
 
   const chatList = [
-    { id: 1, name: 'Marady', role: 'Engineering Manager', time: '10:30 PM', initial: 'M', unread: 2 },
-    { id: 2, name: 'Mars', role: 'Recruiter at Stripe', time: 'Yesterday', initial: 'M', unread: 0 },
+    {
+      id: 1,
+      name: 'Marady',
+      role: 'Engineering Manager',
+      time: '10:30 PM',
+      initial: 'M',
+      unread: 2,
+      status: 'Online',
+    },
+    {
+      id: 2,
+      name: 'Mars',
+      role: 'Recruiter at Stripe',
+      time: 'Yesterday',
+      initial: 'M',
+      unread: 0,
+      status: 'Away',
+    },
   ];
 
-  const activeContact = chatList.find(c => c.id === activeChat);
+  const activeContact = chatList.find((c) => c.id === activeChat);
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: '#f0f4f3' }}>
-
-      {/* ── HEADER ── */}
+    <div className="min-h-screen bg-[#f0f4f3] font-sans">
       <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-lg">
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
@@ -39,7 +53,7 @@ const Messages = () => {
           <Link href="/subscription">
             <button className="text-gray-300 hover:text-white transition-colors">Subscription</button>
           </Link>
-          <Link href="/setting">
+          <Link href="/employer_setting">
             <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
           </Link>
         </nav>
@@ -55,143 +69,176 @@ const Messages = () => {
         </Link>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 md:px-10 py-10">
-
-        {/* ── PAGE TITLE ── */}
+      <main className="mx-auto max-w-7xl px-6 py-10 md:px-10">
         <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#40b594] mb-1">Inbox</p>
+          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#40b594]">Inbox</p>
           <h1 className="text-4xl font-extrabold text-[#071a15]">Messages</h1>
-          <p className="text-[#4a5a55] font-medium mt-1">Communicate with recruiters and hiring managers</p>
+          <p className="mt-1 font-medium text-[#4a5a55]">
+            Communicate with recruiters and hiring managers
+          </p>
         </div>
 
-        {/* ── CHAT CONTAINER ── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex overflow-hidden" style={{ height: '680px' }}>
-
-          {/* ── SIDEBAR ── */}
-          <div className="w-80 border-r border-gray-100 flex flex-col flex-shrink-0">
-
-            <div className="p-5 border-b border-gray-100">
+        <div className="flex h-[680px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="flex w-80 flex-shrink-0 flex-col border-r border-gray-100">
+            <div className="border-b border-gray-100 p-5">
               <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7f79]" size={16} />
+                <Search
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7f79]"
+                  size={16}
+                />
                 <input
                   type="text"
                   placeholder="Search conversations..."
-                  className="w-full bg-[#f0f4f3] rounded-xl py-2.5 pl-10 pr-4 text-sm text-[#071a15] placeholder-[#6b7f79] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 font-medium"
+                  className="w-full rounded-xl bg-[#f0f4f3] py-2.5 pl-10 pr-4 text-sm font-medium text-[#071a15] placeholder-[#6b7f79] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30"
                 />
               </div>
             </div>
 
             <div className="px-5 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#6b7f79]">Recent</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#6b7f79]">
+                Recent
+              </p>
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {chatList.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => setActiveChat(chat.id)}
-                  className={`flex items-center gap-4 px-5 py-4 cursor-pointer transition-all border-l-4 ${
-                    activeChat === chat.id
-                      ? 'bg-[#f0f9f6] border-l-[#40b594]'
-                      : 'border-l-transparent hover:bg-[#f8faf9]'
-                  }`}
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-11 h-11 rounded-full bg-[#051612] flex items-center justify-center text-white font-extrabold text-base">
-                      {chat.initial}
-                    </div>
-                    {chat.id === 1 && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#40b594] border-2 border-white rounded-full" />
-                    )}
-                  </div>
+              {chatList.map((chat) => {
+                const isActive = activeChat === chat.id;
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-0.5">
-                      <h3 className={`font-extrabold text-sm truncate ${activeChat === chat.id ? 'text-[#071a15]' : 'text-[#1a2e29]'}`}>
-                        {chat.name}
-                      </h3>
-                      <span className="text-[10px] text-[#6b7f79] font-semibold flex-shrink-0 ml-2">{chat.time}</span>
-                    </div>
-                    <p className="text-xs text-[#40b594] font-bold tracking-wide truncate">{chat.role}</p>
-                  </div>
+                return (
+                  <div
+                    key={chat.id}
+                    onClick={() => setActiveChat(chat.id)}
+                    className={`cursor-pointer border-l-4 px-5 py-4 transition-all ${
+                      isActive
+                        ? 'border-l-[#40b594] bg-[#f0f9f6]'
+                        : 'border-l-transparent hover:bg-[#f8faf9]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative flex-shrink-0">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#051612] text-base font-extrabold text-white">
+                          {chat.initial}
+                        </div>
+                        <span
+                          className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
+                            chat.status === 'Online' ? 'bg-[#40b594]' : 'bg-[#d7b14a]'
+                          }`}
+                        />
+                      </div>
 
-                  {chat.unread > 0 && (
-                    <span className="w-5 h-5 bg-[#40b594] text-white text-[10px] font-extrabold rounded-full flex items-center justify-center flex-shrink-0">
-                      {chat.unread}
-                    </span>
-                  )}
-                </div>
-              ))}
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 flex items-center justify-between">
+                          <h3
+                            className={`truncate text-sm font-extrabold ${
+                              isActive ? 'text-[#071a15]' : 'text-[#1a2e29]'
+                            }`}
+                          >
+                            {chat.name}
+                          </h3>
+                          <span className="ml-2 flex-shrink-0 text-[10px] font-semibold text-[#6b7f79]">
+                            {chat.time}
+                          </span>
+                        </div>
+
+                        <p className="truncate text-xs font-bold tracking-wide text-[#40b594]">
+                          {chat.role}
+                        </p>
+
+                        <p className="mt-1 text-[11px] font-semibold text-[#7a8b86]">
+                          {chat.status}
+                        </p>
+                      </div>
+
+                      {chat.unread > 0 && (
+                        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#40b594] text-[10px] font-extrabold text-white">
+                          {chat.unread}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* ── CHAT WINDOW ── */}
-          <div className="flex-1 flex flex-col min-w-0">
-
-            <div className="px-7 py-4 border-b border-gray-100 flex items-center justify-between bg-white flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-[#051612] rounded-full flex items-center justify-center font-extrabold text-white text-sm">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="border-b border-gray-100 bg-white px-7 py-5">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#051612] text-sm font-extrabold text-white">
                     {activeContact?.initial}
                   </div>
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#40b594] border-2 border-white rounded-full" />
+                  <span
+                    className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
+                      activeContact?.status === 'Online' ? 'bg-[#40b594]' : 'bg-[#d7b14a]'
+                    }`}
+                  />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-[#071a15] text-sm">{activeContact?.name}</h3>
-                  <p className="text-xs text-[#40b594] font-bold">{activeContact?.role}</p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-1">
-                <button className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-[#f0f4f3] hover:text-[#071a15] transition-all">
-                  <Phone size={18} />
-                </button>
-                <button className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-[#f0f4f3] hover:text-[#071a15] transition-all">
-                  <Video size={18} />
-                </button>
-                <button className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-[#f0f4f3] hover:text-[#071a15] transition-all">
-                  <MoreHorizontal size={18} />
-                </button>
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-extrabold text-[#071a15]">
+                    {activeContact?.name}
+                  </h3>
+                  <p className="truncate text-sm font-medium text-[#4f655f]">
+                    {activeContact?.role}
+                  </p>
+                  <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-[#40b594]">
+                    {activeContact?.status}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-7 py-6 space-y-6" style={{ background: '#f8faf9' }}>
-
+            <div className="flex-1 space-y-6 overflow-y-auto bg-[#f8faf9] px-7 py-6">
               <div className="flex items-center gap-4">
-                <div className="flex-1 h-px bg-gray-200" />
-                <span className="text-[10px] font-bold text-[#6b7f79] uppercase tracking-widest">Today</span>
-                <div className="flex-1 h-px bg-gray-200" />
+                <div className="h-px flex-1 bg-gray-200" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#6b7f79]">
+                  Today
+                </span>
+                <div className="h-px flex-1 bg-gray-200" />
               </div>
 
               <div className="flex items-end gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#051612] flex items-center justify-center text-white font-extrabold text-xs flex-shrink-0">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#051612] text-xs font-extrabold text-white">
                   {activeContact?.initial}
                 </div>
                 <div className="flex flex-col items-start gap-1">
-                  <div className="bg-[#051612] text-white px-5 py-3.5 rounded-2xl rounded-bl-md max-w-sm shadow-sm">
-                    <p className="text-sm leading-relaxed">Hi! Are you still available for the interview on Monday at 4:30 PM?</p>
+                  <div className="max-w-sm rounded-2xl rounded-bl-md bg-[#051612] px-5 py-3.5 text-white shadow-sm">
+                    <p className="text-sm leading-relaxed">
+                      Hi! Are you still available for the interview on Monday at 4:30 PM?
+                    </p>
                   </div>
-                  <span className="text-[10px] text-[#6b7f79] font-semibold ml-1">10:20 AM</span>
+                  <span className="ml-1 text-[10px] font-semibold text-[#6b7f79]">10:20 AM</span>
                 </div>
               </div>
 
               <div className="flex flex-col items-end gap-1">
-                <div className="bg-white border border-gray-200 px-5 py-3.5 rounded-2xl rounded-br-md max-w-sm shadow-sm">
-                  <p className="text-sm text-[#071a15] leading-relaxed">Yes, absolutely! I have it on my calendar. Looking forward to it.</p>
+                <div className="max-w-sm rounded-2xl rounded-br-md border border-gray-200 bg-white px-5 py-3.5 shadow-sm">
+                  <p className="text-sm leading-relaxed text-[#071a15]">
+                    Yes, absolutely! I have it on my calendar. Looking forward to it.
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5 mr-1">
-                  <span className="text-[10px] text-[#6b7f79] font-semibold">10:28 AM</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#40b594" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <div className="mr-1 flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-[#6b7f79]">10:28 AM</span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#40b594"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
               </div>
-
             </div>
 
-            <div className="px-7 py-5 border-t border-gray-100 bg-white flex-shrink-0">
-              <div className="flex items-center gap-3 bg-[#f0f4f3] rounded-2xl px-4 py-3 border border-gray-200 focus-within:border-[#40b594] focus-within:ring-2 focus-within:ring-[#40b594]/20 transition-all">
-                <button className="text-[#6b7f79] hover:text-[#071a15] transition-colors flex-shrink-0">
+            <div className="border-t border-gray-100 bg-white px-7 py-5">
+              <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f0f4f3] px-4 py-3 transition-all focus-within:border-[#40b594] focus-within:ring-2 focus-within:ring-[#40b594]/20">
+                <button className="flex-shrink-0 text-[#6b7f79] transition-colors hover:text-[#071a15]">
                   <Paperclip size={19} />
                 </button>
                 <input
@@ -199,20 +246,19 @@ const Messages = () => {
                   placeholder="Write a message..."
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  className="flex-1 bg-transparent border-none outline-none text-sm text-[#071a15] placeholder-[#6b7f79] font-medium"
+                  className="flex-1 border-none bg-transparent text-sm font-medium text-[#071a15] placeholder-[#6b7f79] outline-none"
                 />
                 <button
-                  className={`p-2 rounded-xl transition-all flex-shrink-0 ${
+                  className={`flex-shrink-0 rounded-xl p-2 transition-all ${
                     message.trim()
-                      ? 'bg-[#051612] text-white hover:bg-[#0d2a23] shadow-sm'
-                      : 'bg-[#d1e8e3] text-[#6b7f79] cursor-not-allowed'
+                      ? 'bg-[#051612] text-white shadow-sm hover:bg-[#0d2a23]'
+                      : 'cursor-not-allowed bg-[#d1e8e3] text-[#6b7f79]'
                   }`}
                 >
                   <Send size={17} />
                 </button>
               </div>
             </div>
-
           </div>
         </div>
       </main>

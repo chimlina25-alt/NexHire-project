@@ -51,7 +51,7 @@ const MyInterviews = () => {
           <Link href="/saved"><button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">My Jobs</button></Link> 
           <Link href="/message"><button className="hover:text-gray-300">Messages</button></Link>
           <Link href="/notification"><button className="hover:text-gray-300">Notification</button></Link>
-          <Link href="/my_profile"><button className="hover:text-gray-300">Settings</button></Link>
+          <Link href="/setting"><button className="hover:text-gray-300">Settings</button></Link>
         </nav>
 
         <Link href="/profile">

@@ -1,165 +1,266 @@
-import React from 'react';
-import { Search, Paperclip, Send, Settings, MoreVertical } from 'lucide-react';
+"use client";
+
+import React, { useState } from 'react';
+import { Search, Paperclip, Send } from 'lucide-react';
 import Link from 'next/link';
 
 const Messages = () => {
-  const chats = [
+  const [activeChat, setActiveChat] = useState(1);
+  const [message, setMessage] = useState('');
+
+  const chatList = [
     {
       id: 1,
       name: 'Marady',
-      role: 'ENGINEERING MANAGER',
-      lastMsg: '10:30 PM',
+      role: 'Engineering Manager',
+      time: '10:30 PM',
       initial: 'M',
-      active: true,
+      unread: 2,
+      status: 'Online',
     },
     {
       id: 2,
       name: 'Mars',
-      role: 'RECRUITER AT STRIPE',
-      lastMsg: 'Yesterday',
+      role: 'Recruiter at Stripe',
+      time: 'Yesterday',
       initial: 'M',
-      active: false,
-    }
+      unread: 0,
+      status: 'Away',
+    },
   ];
 
- return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
-      {/* HEADER NAVIGATION */}
-      <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
+  const activeContact = chatList.find((c) => c.id === activeChat);
+
+  return (
+    <div className="min-h-screen bg-[#f0f4f3] font-sans">
+      <header className="flex items-center justify-between bg-[#051612] px-8 py-4 text-white">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
+          <img src="/logo.png" alt="NexHire" className="h-8 w-8" />
           <span className="text-xl font-bold tracking-tight">NexHire</span>
         </div>
-        
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+
+        <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
           <Link href="/home_page">
-            <button className="hover:text-gray-300 transition-colors">
-              Home
-            </button>
+            <button className="transition-colors hover:text-gray-300">Home</button>
           </Link>
           <Link href="/saved">
-             <button className="hover:text-gray-300 transition-colors">My Jobs</button>
-           </Link> 
-           <Link href="/message">
-          <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Messages</button>
+            <button className="transition-colors hover:text-gray-300">My Jobs</button>
+          </Link>
+          <Link href="/message">
+            <button className="border-b-2 border-[#40b594] pb-1 text-[#40b594]">Messages</button>
           </Link>
           <Link href="/notification">
-            <button className="hover:text-gray-300 transition-colors">Notification</button>
+            <button className="transition-colors hover:text-gray-300">Notification</button>
           </Link>
-          <Link href="/my_profile">
-          <button className="hover:text-gray-300 transition-colors">Settings</button>
+          <Link href="/setting">
+            <button className="transition-colors hover:text-gray-300">Settings</button>
           </Link>
         </nav>
 
         <Link href="/profile">
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
-            <p className="text-sm font-bold">Profile</p>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wider text-gray-400">User name</p>
+              <p className="text-sm font-bold">Profile</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2d4f45] font-bold text-white">
+              U
+            </div>
           </div>
-          <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
-        </div>
-      </Link>
+        </Link>
       </header>
 
-      <main className="max-w-6xl mx-auto p-12">
+      <main className="mx-auto max-w-7xl px-6 py-10 md:px-10">
         <div className="mb-8">
-          <h1 className="text-5xl font-extrabold text-[#1a1a1a] mb-2">Messages</h1>
-          <p className="text-gray-500 font-medium text-lg">Communicate with recruiters and hiring managers</p>
+          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#40b594]">Inbox</p>
+          <h1 className="text-4xl font-extrabold text-[#071a15]">Messages</h1>
+          <p className="mt-1 font-medium text-[#4a5a55]">
+            Communicate with recruiters and hiring managers
+          </p>
         </div>
 
-        {/* CHAT CONTAINER */}
-        <div className="bg-white rounded-[35px] border border-gray-100 shadow-sm overflow-hidden flex h-[700px]">
-          
-          {/* SIDEBAR - CHAT LIST */}
-          <div className="w-1/3 border-r border-gray-100 flex flex-col">
-            <div className="p-6">
+        <div className="flex h-[680px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="flex w-80 flex-shrink-0 flex-col border-r border-gray-100">
+            <div className="border-b border-gray-100 p-5">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input 
-                  type="text" 
-                  placeholder="search chats..." 
-                  className="w-full bg-gray-50 border-none rounded-xl py-3 pl-12 pr-4 text-sm focus:ring-0"
+                <Search
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7f79]"
+                  size={16}
+                />
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  className="w-full rounded-xl bg-[#f0f4f3] py-2.5 pl-10 pr-4 text-sm font-medium text-[#071a15] placeholder-[#6b7f79] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30"
                 />
               </div>
+            </div>
+
+            <div className="px-5 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#6b7f79]">
+                Recent
+              </p>
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {chats.map((chat) => (
-                <div 
-                  key={chat.id} 
-                  className={`px-6 py-5 flex items-center gap-4 cursor-pointer border-l-4 transition-all ${
-                    chat.active ? 'bg-[#f1fcf9] border-[#153a30]' : 'border-transparent hover:bg-gray-50'
+              {chatList.map((chat) => {
+                const isActive = activeChat === chat.id;
+
+                return (
+                  <div
+                    key={chat.id}
+                    onClick={() => setActiveChat(chat.id)}
+                    className={`cursor-pointer border-l-4 px-5 py-4 transition-all ${
+                      isActive
+                        ? 'border-l-[#40b594] bg-[#f0f9f6]'
+                        : 'border-l-transparent hover:bg-[#f8faf9]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative flex-shrink-0">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#051612] text-base font-extrabold text-white">
+                          {chat.initial}
+                        </div>
+                        <span
+                          className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
+                            chat.status === 'Online' ? 'bg-[#40b594]' : 'bg-[#d7b14a]'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 flex items-center justify-between">
+                          <h3
+                            className={`truncate text-sm font-extrabold ${
+                              isActive ? 'text-[#071a15]' : 'text-[#1a2e29]'
+                            }`}
+                          >
+                            {chat.name}
+                          </h3>
+                          <span className="ml-2 flex-shrink-0 text-[10px] font-semibold text-[#6b7f79]">
+                            {chat.time}
+                          </span>
+                        </div>
+
+                        <p className="truncate text-xs font-bold tracking-wide text-[#40b594]">
+                          {chat.role}
+                        </p>
+
+                        <p className="mt-1 text-[11px] font-semibold text-[#7a8b86]">
+                          {chat.status}
+                        </p>
+                      </div>
+
+                      {chat.unread > 0 && (
+                        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#40b594] text-[10px] font-extrabold text-white">
+                          {chat.unread}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="border-b border-gray-100 bg-white px-7 py-5">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#051612] text-sm font-extrabold text-white">
+                    {activeContact?.initial}
+                  </div>
+                  <span
+                    className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
+                      activeContact?.status === 'Online' ? 'bg-[#40b594]' : 'bg-[#d7b14a]'
+                    }`}
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-extrabold text-[#071a15]">
+                    {activeContact?.name}
+                  </h3>
+                  <p className="truncate text-sm font-medium text-[#4f655f]">
+                    {activeContact?.role}
+                  </p>
+                  <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-[#40b594]">
+                    {activeContact?.status}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-6 overflow-y-auto bg-[#f8faf9] px-7 py-6">
+              <div className="flex items-center gap-4">
+                <div className="h-px flex-1 bg-gray-200" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#6b7f79]">
+                  Today
+                </span>
+                <div className="h-px flex-1 bg-gray-200" />
+              </div>
+
+              <div className="flex items-end gap-3">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#051612] text-xs font-extrabold text-white">
+                  {activeContact?.initial}
+                </div>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="max-w-sm rounded-2xl rounded-bl-md bg-[#051612] px-5 py-3.5 text-white shadow-sm">
+                    <p className="text-sm leading-relaxed">
+                      Hi! Are you still available for the interview on Monday at 4:30 PM?
+                    </p>
+                  </div>
+                  <span className="ml-1 text-[10px] font-semibold text-[#6b7f79]">10:20 AM</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-end gap-1">
+                <div className="max-w-sm rounded-2xl rounded-br-md border border-gray-200 bg-white px-5 py-3.5 shadow-sm">
+                  <p className="text-sm leading-relaxed text-[#071a15]">
+                    Yes, absolutely! I have it on my calendar. Looking forward to it.
+                  </p>
+                </div>
+                <div className="mr-1 flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-[#6b7f79]">10:28 AM</span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#40b594"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 bg-white px-7 py-5">
+              <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f0f4f3] px-4 py-3 transition-all focus-within:border-[#40b594] focus-within:ring-2 focus-within:ring-[#40b594]/20">
+                <button className="flex-shrink-0 text-[#6b7f79] transition-colors hover:text-[#071a15]">
+                  <Paperclip size={19} />
+                </button>
+                <input
+                  type="text"
+                  placeholder="Write a message..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  className="flex-1 border-none bg-transparent text-sm font-medium text-[#071a15] placeholder-[#6b7f79] outline-none"
+                />
+                <button
+                  className={`flex-shrink-0 rounded-xl p-2 transition-all ${
+                    message.trim()
+                      ? 'bg-[#051612] text-white shadow-sm hover:bg-[#0d2a23]'
+                      : 'cursor-not-allowed bg-[#d1e8e3] text-[#6b7f79]'
                   }`}
                 >
-                  <div className="w-12 h-12 bg-[#153a30] rounded-full flex items-center justify-center text-white font-bold">
-                    {chat.initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline">
-                      <h3 className="font-extrabold text-[#1a1a1a] truncate">{chat.name}</h3>
-                      <span className="text-[10px] font-bold text-gray-400">{chat.lastMsg}</span>
-                    </div>
-                    <p className="text-[10px] font-extrabold text-[#40b594] uppercase tracking-wider">{chat.role}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* CHAT WINDOW */}
-          <div className="flex-1 flex flex-col bg-white">
-            {/* CHAT HEADER */}
-            <div className="px-8 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#153a30] rounded-full flex items-center justify-center text-white font-bold">U</div>
-                <div>
-                  <h3 className="font-extrabold text-sm">User name</h3>
-                  <p className="text-[10px] text-[#40b594] font-bold">online</p>
-                </div>
-              </div>
-            </div>
-
-            {/* MESSAGES AREA */}
-            <div className="flex-1 p-8 overflow-y-auto space-y-6 flex flex-col">
-              {/* Recipient Message */}
-              <div className="max-w-[70%] self-start">
-                <div className="bg-white border border-gray-100 p-4 rounded-2xl rounded-tl-none shadow-sm">
-                  <p className="text-sm font-medium text-[#1a1a1a]">Hi! Are you still available for the interview on Monday at 4:30 PM?</p>
-                </div>
-                <span className="text-[10px] text-gray-400 font-bold mt-2 block ml-1">10:28 AM</span>
-              </div>
-
-              {/* User Message */}
-              <div className="max-w-[70%] self-end">
-                <div className="bg-[#153a30] p-4 rounded-2xl rounded-tr-none shadow-md">
-                  <p className="text-sm font-medium text-white">Yes, absolutely! I have it on my calendar. Looking forward to it.</p>
-                </div>
-                <div className="flex items-center justify-end gap-1 mt-2 mr-1">
-                  <span className="text-[10px] text-gray-400 font-bold">10:28 AM</span>
-                  <div className="w-3 h-3 text-[#40b594]">✓✓</div>
-                </div>
-              </div>
-            </div>
-
-            {/* INPUT AREA */}
-            <div className="p-8">
-              <div className="bg-gray-50 rounded-2xl p-2 flex items-center gap-2 border border-gray-100">
-                <button className="p-3 text-gray-400 hover:text-[#153a30] transition-colors">
-                  <Paperclip size={20} />
-                </button>
-                <input 
-                  type="text" 
-                  placeholder="Write a message..." 
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium py-3 px-2"
-                />
-                <button className="bg-[#153a30] text-white p-3 rounded-xl hover:bg-[#0d2a23] transition-all shadow-md">
-                  <Send size={20} />
+                  <Send size={17} />
                 </button>
               </div>
             </div>
           </div>
-
         </div>
       </main>
     </div>

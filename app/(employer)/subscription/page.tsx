@@ -90,7 +90,7 @@ const SubscriptionPlans = () => {
             <button className="text-gray-300 hover:text-white transition-colors">Notification</button>
           </Link>
           <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Subscription</button>
-          <Link href="/setting">
+          <Link href="/employer_setting">
             <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
           </Link>
         </nav>

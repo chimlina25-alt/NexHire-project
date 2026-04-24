@@ -52,7 +52,7 @@ const EmployerDashboard = () => {
           <Link href="/employer_message"><button className="text-gray-300 hover:text-white transition-colors">Messages</button></Link>
           <Link href="/employer_notification"><button className="text-gray-300 hover:text-white transition-colors">Notification</button></Link>
           <Link href="/subscription"><button className="text-gray-300 hover:text-white transition-colors">Subscription</button></Link>
-          <Link href="/setting"><button className="text-gray-300 hover:text-white transition-colors">Settings</button></Link>
+          <Link href="/employer_setting"><button className="text-gray-300 hover:text-white transition-colors">Settings</button></Link>
         </nav>
 
         <Link href="/employer_profile">
