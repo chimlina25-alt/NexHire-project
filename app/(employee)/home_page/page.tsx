@@ -1,33 +1,59 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Bookmark, Settings, X } from 'lucide-react';
-import Link from 'next/link';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Search,
+  ChevronDown,
+  Bookmark,
+  BookmarkCheck,
+  X,
+  MapPin,
+  Clock,
+  DollarSign,
+  SlidersHorizontal,
+} from "lucide-react";
+import Link from "next/link";
+import UserNavProfile from "@/components/ui/UserNavProfile";
+
+const jobTypeOptions = ["Full-time", "Part-time", "Contract", "Freelance", "Internship"];
+const experienceOptions = ["Entry Level", "Mid Level", "Senior", "Lead / Manager", "Executive"];
+const salaryOptions = ["$50k – $100k", "$100k – $150k", "$150k – $200k", "$200k+"];
+
+const tagColors: Record<string, string> = {
+  "Full-time": "bg-emerald-50 text-emerald-700 border-emerald-100",
+  "Part-time": "bg-blue-50 text-blue-700 border-blue-100",
+  Contract: "bg-orange-50 text-orange-700 border-orange-100",
+  Freelance: "bg-pink-50 text-pink-700 border-pink-100",
+  Internship: "bg-yellow-50 text-yellow-700 border-yellow-100",
+  Remote: "bg-violet-50 text-violet-700 border-violet-100",
+  "On-site": "bg-gray-50 text-gray-600 border-gray-200",
+  Hybrid: "bg-teal-50 text-teal-700 border-teal-100",
+  Senior: "bg-amber-50 text-amber-700 border-amber-100",
+  "Mid Level": "bg-sky-50 text-sky-700 border-sky-100",
+  "Entry Level": "bg-rose-50 text-rose-700 border-rose-100",
+  Executive: "bg-indigo-50 text-indigo-700 border-indigo-100",
+  "Lead / Manager": "bg-purple-50 text-purple-700 border-purple-100",
+};
 
 const JobSeekerHome = () => {
-  // --- STATE MANAGEMENT ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [savedJobs, setSavedJobs] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState("Most Relevant");
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Record<string, string>>({
-    'Job type': '',
-    'On-site': '',
-    'Experiences level': '',
-    'Salary': ''
+
+  const [filters, setFilters] = useState({
+    jobType: "",
+    experience: "",
+    salary: "",
+    arrangement: "",
   });
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // --- FILTER OPTIONS ---
-  const filterOptions: Record<string, string[]> = {
-    'Job type': ['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship'],
-    'On-site': ['Remote', 'On-site', 'Hybrid'],
-    'Experiences level': ['Entry-level', 'Mid-level', 'Senior', 'Lead/Manager', 'Executive'],
-    'Salary': ['$50k - $100k', '$100k - $150k', '$150k - $200k', '$250k+']
-  };
-
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node | null)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setActiveDropdown(null);
       }
     };
@@ -35,183 +61,154 @@ const JobSeekerHome = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSelect = (category: string, value: string) => {
-    setFilters(prev => ({ ...prev, [category]: value }));
-    setActiveDropdown(null);
-  };
+  const clearFilters = () =>
+    setFilters({ jobType: "", experience: "", salary: "", arrangement: "" });
 
-  const jobListings = [
-    {
-      id: 1,
-      title: 'Full Stack Developer',
-      company: 'Company name',
-      description: 'Work with modern tech stack across frontend and backend.',
-      salary: '$190k - $230k',
-      tags: ['Part-time', 'Remote', 'Senior']
-    },
-    {
-      id: 2,
-      title: 'Computer Science',
-      company: 'Company name',
-      description: 'Work with modern tech stack across frontend and backend.',
-      salary: '$150k - $200k',
-      tags: ['Full-time', 'On-site', 'Mid-level']
-    }
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+  const pillFilters: { key: keyof typeof filters; label: string; options: string[] }[] = [
+    { key: "jobType", label: "Job Type", options: jobTypeOptions },
+    { key: "arrangement", label: "Work Mode", options: ["On-site", "Remote", "Hybrid"] },
+    { key: "experience", label: "Experience", options: experienceOptions },
+    { key: "salary", label: "Salary", options: salaryOptions },
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
-      {/* HEADER NAVIGATION */}
-      <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
+    <div className="min-h-screen font-sans pb-16" style={{ background: "#f0f4f3" }}>
+      <header className="flex items-center justify-between bg-[#051612] px-8 py-4 text-white">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
+          <img src="/logo.png" alt="NexHire" className="h-8 w-8" />
           <span className="text-xl font-bold tracking-tight">NexHire</span>
         </div>
-        
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">
-            Home
-          </button>
+
+        <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
+          <Link href="/home_page">
+            <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Home</button>
+          </Link>
           <Link href="/saved">
-             <button className="hover:text-gray-300 transition-colors">My Jobs</button>
-           </Link> 
-           <Link href="/message">
-          <button className="hover:text-gray-300 transition-colors">Messages</button>
+            <button className="transition-colors hover:text-gray-300">My Jobs</button>
+          </Link>
+          <Link href="/message">
+            <button className="transition-colors hover:text-gray-300">Messages</button>
           </Link>
           <Link href="/notification">
-            <button className="hover:text-gray-300 transition-colors">Notification</button>
+            <button className="transition-colors hover:text-gray-300">Notification</button>
           </Link>
           <Link href="/setting">
-            <button className="hover:text-gray-300 transition-colors">Settings</button>
+            <button className="transition-colors hover:text-gray-300">Settings</button>
           </Link>
         </nav>
 
-        <Link href="/profile">
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
-            <p className="text-sm font-bold">Profile</p>
-          </div>
-          <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
-        </div>
-      </Link>
+        <UserNavProfile />
       </header>
 
-      {/* HERO SECTION */}
-      <section className="bg-[#051612] text-white pt-20 pb-24 px-8 border-t border-gray-800">
+      <section className="bg-[#051612] text-white pt-16 pb-28 px-8">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl font-extrabold mb-4">Your Next Great Role</h1>
-          <p className="text-gray-400 text-lg mb-10 max-w-lg leading-relaxed">
+          <h1 className="text-5xl font-extrabold mb-3 leading-tight tracking-tight">
+            Your Next Great Role
+          </h1>
+          <p className="text-gray-400 text-base mb-10 max-w-md leading-relaxed font-medium">
             Discover opportunities matched to your skills, experience, and career goals.
           </p>
 
-          <div className="flex gap-4 mb-6">
+          <div className="flex gap-3 mb-5">
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input 
-                type="text" 
-                placeholder="search jobs by title, company, or skills..." 
-                className="w-full bg-white text-black py-4 pl-12 pr-4 rounded-xl focus:outline-none"
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Job title, company, or skill..."
+                className="w-full bg-white text-[#071a15] py-3.5 pl-11 pr-4 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#40b594]/40 placeholder-gray-400"
               />
             </div>
-            <button className="bg-[#1e3a32] px-8 py-4 rounded-xl font-bold hover:bg-[#2d4f45] transition-all border border-[#2d4f45]">
+            <button className="bg-[#40b594] text-[#051612] px-8 py-3.5 rounded-xl font-extrabold text-sm hover:bg-[#34a382] transition-all">
               Search
             </button>
           </div>
 
-          {/* FILTER DROPDOWNS */}
-          <div className="flex flex-wrap gap-3" ref={dropdownRef}>
-            {Object.keys(filterOptions).map((category) => (
-              <div key={category} className="relative">
-                <button 
-                  onClick={() => setActiveDropdown(activeDropdown === category ? null : category)}
-                  className={`border px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${
-                    filters[category] 
-                    ? 'bg-[#40b594] border-[#40b594] text-white' 
-                    : 'bg-[#122b25] border-[#1e3a32] text-gray-300 hover:bg-[#1e3a32]'
-                  }`}
-                >
-                  {filters[category] || category}
-                  {filters[category] ? (
-                    <X size={14} className="ml-1" onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelect(category, '');
-                    }} />
-                  ) : (
-                    <ChevronDown size={14} />
-                  )}
-                </button>
+          <div className="flex flex-wrap items-center gap-2.5" ref={dropdownRef}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold border transition-all ${
+                showFilters
+                  ? "bg-[#40b594] border-[#40b594] text-[#051612]"
+                  : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+              }`}
+            >
+              <SlidersHorizontal size={12} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-[#051612] text-[#40b594] rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-extrabold">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
 
-                {activeDropdown === category && (
-                  <div className="absolute left-0 mt-2 w-56 bg-[#122b25] border border-[#1e3a32] rounded-xl shadow-2xl z-50 overflow-hidden">
-                    <div className="py-2">
-                      {filterOptions[category].map((option: string) => (
-                        <button
-                          key={option}
-                          onClick={() => handleSelect(category, option)}
-                          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-[#1e3a32] hover:text-white transition-colors"
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    {/* CUSTOM INPUT OPTION */}
-                    <div className="p-3 border-t border-[#1e3a32] bg-[#0d1f1b]">
-                      <input 
-                        type="text"
-                        placeholder="other..."
-                        className="w-full bg-[#051612] text-white text-xs p-2.5 rounded-lg border border-[#1e3a32] focus:outline-none focus:border-[#40b594]"
-                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                          if (e.key === 'Enter' && e.currentTarget.value.trim() !== '') {
-                            handleSelect(category, e.currentTarget.value);
-                          }
+            {showFilters &&
+              pillFilters.map(({ key, label, options }) => (
+                <div key={key} className="relative">
+                  <button
+                    onClick={() => setActiveDropdown(activeDropdown === key ? null : key)}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold border transition-all ${
+                      filters[key]
+                        ? "bg-[#40b594] border-[#40b594] text-[#051612]"
+                        : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+                    }`}
+                  >
+                    {filters[key] || label}
+                    {filters[key] ? (
+                      <X
+                        size={11}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilters((p) => ({ ...p, [key]: "" }));
                         }}
                       />
+                    ) : (
+                      <ChevronDown
+                        size={11}
+                        className={`transition-transform ${activeDropdown === key ? "rotate-180" : ""}`}
+                      />
+                    )}
+                  </button>
+
+                  {activeDropdown === key && (
+                    <div className="absolute left-0 top-full mt-2 w-52 bg-[#0d2219] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                      <div className="py-1.5">
+                        {options.map((opt) => (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              setFilters((p) => ({ ...p, [key]: opt }));
+                              setActiveDropdown(null);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors ${
+                              filters[key] === opt
+                                ? "bg-[#40b594]/20 text-[#40b594]"
+                                : "text-gray-300 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              ))}
+
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearFilters}
+                className="text-xs font-bold text-gray-500 hover:text-gray-300 transition-colors px-1"
+              >
+                Clear all
+              </button>
+            )}
           </div>
         </div>
       </section>
-
-      {/* JOB LISTINGS */}
-      <main className="max-w-4xl mx-auto p-8 -mt-12">
-        <div className="space-y-6">
-          {jobListings.map((job) => (
-            <div key={job.id} className="bg-white p-8 rounded-[25px] border border-gray-100 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-all">
-              <div className="flex justify-between items-start mb-2">
-                <h2 className="text-2xl font-extrabold text-[#1a1a1a]">{job.title}</h2>
-                <div className="flex gap-3">
-                  <Link href="/">
-                    <button className="bg-[#153a30] text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-[#0d2a23]">View Details</button>
-                  </Link>
-                  <button className="bg-[#153a30] text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-[#0d2a23]">Apply</button>
-                  <button className="p-2 border border-gray-100 rounded-lg text-gray-400 hover:text-black hover:border-gray-300">
-                    <Bookmark size={20} />
-                  </button>
-                </div>
-              </div>
-              
-              <p className="text-gray-500 font-bold text-sm mb-4">{job.company}</p>
-              <p className="text-gray-400 text-sm mb-6">{job.description}</p>
-              
-              <div className="flex items-center gap-6">
-                <span className="text-xl font-extrabold text-[#1a1a1a]">{job.salary}</span>
-                <div className="flex gap-2">
-                  {job.tags.map((tag) => (
-                    <span key={tag} className="bg-[#153a30] text-white text-[10px] font-bold px-3 py-1.5 rounded-md">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </main>
     </div>
   );
 };

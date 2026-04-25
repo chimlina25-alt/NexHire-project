@@ -1,7 +1,6 @@
-// app/my_profile/page.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Phone,
@@ -11,7 +10,6 @@ import {
   Pencil,
   Save,
   X,
-  Sparkles,
   Briefcase,
   Camera,
   Trash2,
@@ -41,8 +39,9 @@ export default function JobSeekerProfile() {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const cvInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const [profileImage, setProfileImage] = React.useState<File | null>(null);
   const [sourceImageUrl, setSourceImageUrl] = React.useState<string | null>(null);
@@ -51,22 +50,60 @@ export default function JobSeekerProfile() {
 
   const [cvFile, setCvFile] = React.useState<File | null>(null);
 
-  const [saved, setSaved] = React.useState<JobSeekerForm>({
-    description:
-      "Full stack developer focused on building responsive products, clean UI systems, and reliable frontend experiences.",
-    firstName: "Marsslu",
-    lastName: "SMC",
-    contact: "+855 12 345 678",
-    address: "Phnom Penh, Cambodia",
-    educationLevel: "Bachelor",
-    schoolUniversity: "Royal University of Phnom Penh",
-    year: "2020",
+  const emptyForm: JobSeekerForm = {
+    description: "",
+    firstName: "",
+    lastName: "",
+    contact: "",
+    address: "",
+    educationLevel: "",
+    schoolUniversity: "",
+    year: "",
     cvFileName: "",
     cvUrl: "",
     profileImageUrl: "",
-  });
+  };
 
-  const [draft, setDraft] = React.useState<JobSeekerForm>(saved);
+  const [saved, setSaved] = React.useState<JobSeekerForm>(emptyForm);
+  const [draft, setDraft] = React.useState<JobSeekerForm>(emptyForm);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const res = await fetch("/api/auth/job-seeker-profile", { cache: "no-store" });
+        const data = await res.json();
+
+        if (!res.ok || !data) {
+          setSaved(emptyForm);
+          setDraft(emptyForm);
+          return;
+        }
+
+        const mapped: JobSeekerForm = {
+          description: data.description || "",
+          firstName: data.firstName || "",
+          lastName: data.lastName || "",
+          contact: data.contact || "",
+          address: data.address || "",
+          educationLevel: data.educationLevel || "",
+          schoolUniversity: data.schoolUniversity || "",
+          year: data.year || "",
+          cvFileName: data.cvFileName || "",
+          cvUrl: data.cvUrl || "",
+          profileImageUrl: data.profileImage || "",
+        };
+
+        setSaved(mapped);
+        setDraft(mapped);
+      } catch (error) {
+        console.error("LOAD JOB SEEKER PROFILE ERROR:", error);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -181,7 +218,7 @@ export default function JobSeekerProfile() {
     setSaved((prev) => ({
       ...prev,
       cvFileName: "",
-      cvUrl: prev.cvFileName === draft.cvFileName ? "" : prev.cvUrl,
+      cvUrl: "",
     }));
 
     if (cvInputRef.current) cvInputRef.current.value = "";
@@ -232,20 +269,22 @@ export default function JobSeekerProfile() {
         body: formData,
       });
 
-      const text = await res.text();
-      const result = text ? JSON.parse(text) : {};
+      const data = await res.json();
 
       if (!res.ok) {
-        alert(result.error || "Failed to update profile");
+        alert(data.error || "Failed to update profile");
         return;
       }
 
-      setSaved({
+      const nextSaved: JobSeekerForm = {
         ...draft,
-        cvUrl: result.cvUrl || draft.cvUrl,
-        cvFileName: result.cvFileName || draft.cvFileName,
-        profileImageUrl: result.profileImageUrl || draft.profileImageUrl || saved.profileImageUrl,
-      });
+        cvUrl: data.cvUrl || draft.cvUrl,
+        cvFileName: data.cvFileName || draft.cvFileName,
+        profileImageUrl: data.profileImageUrl || draft.profileImageUrl,
+      };
+
+      setSaved(nextSaved);
+      setDraft(nextSaved);
       setCvFile(null);
       setIsEditing(false);
     } catch (error) {
@@ -256,7 +295,7 @@ export default function JobSeekerProfile() {
     }
   };
 
-  const fullName = `${saved.firstName} ${saved.lastName}`.trim();
+  const fullName = `${saved.firstName} ${saved.lastName}`.trim() || "Profile";
   const profile = isEditing ? draft : saved;
   const displayImageSrc = croppedPreviewUrl || sourceImageUrl || saved.profileImageUrl || "";
 
@@ -272,9 +311,18 @@ export default function JobSeekerProfile() {
     saved.cvFileName || saved.cvUrl,
     saved.profileImageUrl || croppedPreviewUrl || sourceImageUrl,
   ];
+
   const completion = Math.round(
     (completionFields.filter(Boolean).length / completionFields.length) * 100
   );
+
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-[#edf4f1] flex items-center justify-center text-sm text-[#58706a]">
+        Loading profile...
+      </div>
+    );
+  }
 
   return (
     <>
@@ -296,10 +344,14 @@ export default function JobSeekerProfile() {
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-[10px] uppercase tracking-wider text-gray-400">User name</p>
-              <p className="text-sm font-bold">Profile</p>
+              <p className="text-sm font-bold truncate max-w-[140px]">{fullName}</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2d4f45] font-bold text-white">
-              {saved.firstName.charAt(0) || "U"}
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2d4f45] font-bold text-white">
+              {saved.profileImageUrl ? (
+                <img src={saved.profileImageUrl} alt={fullName} className="h-full w-full object-cover" />
+              ) : (
+                saved.firstName.charAt(0) || "U"
+              )}
             </div>
           </div>
         </header>
@@ -308,7 +360,6 @@ export default function JobSeekerProfile() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(64,181,148,0.22),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.08),_transparent_28%)]" />
           <div className="relative mx-auto max-w-7xl px-8 py-12 md:py-16">
             <div className="max-w-3xl">
-             
               <h1 className="text-3xl font-black tracking-tight text-white md:text-5xl">
                 {fullName}
               </h1>
@@ -364,7 +415,7 @@ export default function JobSeekerProfile() {
                 <div className="max-w-2xl">
                   <h2 className="text-2xl font-black text-[#0d211b] md:text-3xl">{fullName}</h2>
                   <p className="mt-2 text-sm font-bold text-[#40b594]">Open to opportunities</p>
-                  <p className="mt-4 text-sm leading-7 text-[#58706a]">{saved.description}</p>
+                  <p className="mt-4 text-sm leading-7 text-[#58706a]">{saved.description || "No description yet."}</p>
                 </div>
               </div>
 
@@ -501,7 +552,7 @@ export default function JobSeekerProfile() {
                     className="h-36 w-full resize-none rounded-3xl border border-[#d9e8e2] bg-[#f6fbf8] px-5 py-4 text-sm"
                   />
                 ) : (
-                  <p className="text-sm leading-8 text-[#405752]">{saved.description}</p>
+                  <p className="text-sm leading-8 text-[#405752]">{saved.description || "Not added"}</p>
                 )}
               </section>
 

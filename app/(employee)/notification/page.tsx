@@ -1,117 +1,280 @@
-import React from 'react';
-import { CheckCircle2, MoreVertical, ArrowRight, Video, MessageSquare } from 'lucide-react';
-import Link from 'next/link';
+"use client";
 
-const NotificationsInterviews = () => {
-  const alerts = [
-    {
-      id: 1,
-      category: 'INTERVIEW',
-      title: 'Technical Interview for 30m',
-      description: 'Your session with Stripe for Full Stack Developer is starting soon.',
-      time: '30m ago',
-      buttonText: 'Join Meeting',
-      icon: <Video size={18} />,
-    },
-    {
-      id: 2,
-      category: 'MESSAGE',
-      title: 'New message form Mars',
-      description: "Mars toaboa: 'I've attached the interview preparation guide..'",
-      time: '1h ago',
-      buttonText: 'View Message',
-      icon: <MessageSquare size={18} />,
-    }
-  ];
+import React, { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Bell,
+  CheckCircle,
+  Clock,
+  MessageSquare,
+  MoreVertical,
+  Video,
+} from "lucide-react";
+import Link from "next/link";
+
+type NotificationItem = {
+  id: string;
+  type: "Interview" | "Message" | "Application" | "System";
+  title: string;
+  description: string;
+  time: string;
+  actionText: string;
+  read: boolean;
+};
+
+function formatRelativeTime(dateString: string) {
+  const date = new Date(dateString);
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+const typeStyle: Record<
+  NotificationItem["type"],
+  { badge: string; iconBg: string; iconColor: string; button: string; icon: React.ElementType }
+> = {
+  Interview: {
+    badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    iconBg: "bg-[#051612]",
+    iconColor: "text-[#40b594]",
+    button: "bg-[#051612] hover:bg-[#0d2a23]",
+    icon: Video,
+  },
+  Message: {
+    badge: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+    iconBg: "bg-[#e8eeff]",
+    iconColor: "text-[#3553c7]",
+    button: "bg-[#3553c7] hover:bg-[#2942a6]",
+    icon: MessageSquare,
+  },
+  Application: {
+    badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    iconBg: "bg-[#051612]",
+    iconColor: "text-[#40b594]",
+    button: "bg-[#051612] hover:bg-[#0d2a23]",
+    icon: Bell,
+  },
+  System: {
+    badge: "bg-gray-100 text-gray-700 ring-1 ring-gray-200",
+    iconBg: "bg-[#051612]",
+    iconColor: "text-[#40b594]",
+    button: "bg-[#051612] hover:bg-[#0d2a23]",
+    icon: Bell,
+  },
+};
+
+export default function NotificationsInterviews() {
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const unreadCount = notifications.filter((item) => !item.read).length;
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch("/api/notifications", { cache: "no-store" });
+        const data = await res.json();
+
+        if (!res.ok) return;
+
+        const mapped = (data || []).map((item: any) => ({
+          id: item.id,
+          type:
+            item.type === "interview"
+              ? "Interview"
+              : item.type === "message"
+                ? "Message"
+                : item.type === "application"
+                  ? "Application"
+                  : "System",
+          title: item.title,
+          description: item.description,
+          time: formatRelativeTime(item.createdAt),
+          actionText:
+            item.type === "message"
+              ? "View Message"
+              : item.type === "interview"
+                ? "View Interview"
+                : "Open",
+          read: Boolean(item.readAt),
+        }));
+
+        setNotifications(mapped);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+  };
+
+  const markOneRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, read: true } : item))
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
-      {/* HEADER NAVIGATION */}
-      <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
-          <span className="text-xl font-bold tracking-tight">NexHire</span>
+    <div className="min-h-screen bg-[#f0f4f3] pb-16 font-sans">
+      <header className="sticky top-0 z-50 flex items-center justify-between bg-[#051612] px-8 py-4 text-white shadow-lg">
+        <div className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="NexHire" className="h-8 w-8" />
+          <span className="text-xl font-extrabold tracking-tight">NexHire</span>
         </div>
-        
-         <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <Link href="/home_page">
-            <button className="hover:text-gray-300 transition-colors">
-              Home
-            </button>
-          </Link>
-          <Link href="/saved">
-             <button className="hover:text-gray-300 transition-colors">My Jobs</button>
-           </Link> 
-           <Link href="/message">
-          <button className="hover:text-gray-300 transition-colors">Messages</button>
-          </Link>
-          <Link href="/notification">
-            <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Notification</button>
-          </Link>
-          <Link href="/setting">
-          <button className="hover:text-gray-300 transition-colors">Settings</button>
-          </Link>
+
+        <nav className="hidden items-center gap-8 text-sm font-semibold md:flex">
+          <Link href="/home_page"><button className="text-gray-300 transition-colors hover:text-white">Home</button></Link>
+          <Link href="/saved"><button className="text-gray-300 transition-colors hover:text-white">My Jobs</button></Link>
+          <Link href="/message"><button className="text-gray-300 transition-colors hover:text-white">Messages</button></Link>
+          <Link href="/notification"><button className="border-b-2 border-[#40b594] pb-1 text-[#40b594]">Notification</button></Link>
+          <Link href="/setting"><button className="text-gray-300 transition-colors hover:text-white">Settings</button></Link>
         </nav>
-        
-<Link href="/profile">
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
-            <p className="text-sm font-bold">Profile</p>
+
+        <Link href="/profile">
+          <div className="group flex cursor-pointer items-center gap-3">
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-widest text-gray-500">User Name</p>
+              <p className="text-sm font-bold text-white transition-colors group-hover:text-[#40b594]">Profile</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2d4f45] text-sm font-extrabold text-white">
+              U
+            </div>
           </div>
-          <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
-        </div>
-      </Link>
+        </Link>
       </header>
 
-      <main className="max-w-4xl mx-auto p-12">
-        <div className="flex items-end justify-between mb-10">
+      <main className="mx-auto max-w-4xl px-8 py-10">
+        <div className="mb-10 flex items-start justify-between">
           <div>
-            <h1 className="text-5xl font-extrabold text-[#1a1a1a] mb-2">Notifications</h1>
-            <p className="text-gray-500 font-medium text-lg">Keep track of your professional journey.</p>
+            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#40b594]">Activity</p>
+            <h1 className="text-4xl font-extrabold leading-tight text-[#071a15]">Notifications</h1>
+            <p className="mt-1 font-medium text-[#4a5a55]">Keep track of your interview and message updates.</p>
           </div>
-          <button className="flex items-center gap-2 text-gray-500 hover:text-[#1a1a1a] font-bold text-sm transition-colors">
-            <CheckCircle2 size={20} />
-            Mark all read
-          </button>
-        </div>
 
-        {/* NOTIFICATION CARDS */}
-        <div className="space-y-6">
-          {alerts.map((alert) => (
-            <div 
-              key={alert.id} 
-              className="bg-white rounded-[25px] border border-gray-100 shadow-sm p-8 flex items-start justify-between hover:shadow-md transition-shadow"
+          <div className="mt-2 flex items-center gap-3">
+            {unreadCount > 0 && (
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 shadow-sm">
+                <Bell size={15} className="text-[#40b594]" />
+                <span className="text-sm font-extrabold text-[#071a15]">{unreadCount} unread</span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={markAllRead}
+              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#071a15] shadow-sm transition-all hover:border-[#40b594] hover:text-[#40b594]"
             >
-              <div className="flex-1">
-                <p className="text-xs font-extrabold text-[#1a1a1a] mb-1 uppercase tracking-widest">
-                  {alert.category}
-                </p>
-                <h2 className="text-xl font-extrabold text-[#1a1a1a] mb-1">
-                  {alert.title}
-                </h2>
-                <p className="text-gray-400 font-medium text-sm mb-6">
-                  {alert.description}
-                </p>
-                
-                <button className="bg-[#153a30] text-white px-6 py-3 rounded-xl font-extrabold text-sm flex items-center gap-2 hover:bg-[#0d2a23] transition-all">
-                  {alert.buttonText}
-                  <ArrowRight size={16} />
-                </button>
-              </div>
-
-              <div className="flex flex-col items-end justify-between self-stretch">
-                <span className="text-xs font-bold text-gray-300">{alert.time}</span>
-                <button className="text-gray-400 hover:text-black mt-auto">
-                  <MoreVertical size={20} />
-                </button>
-              </div>
-            </div>
-          ))}
+              <CheckCircle size={16} />
+              Mark all read
+            </button>
+          </div>
         </div>
+
+        {loading ? (
+          <div className="bg-white rounded-2xl p-8 border border-gray-100 text-sm text-[#6b7f79]">
+            Loading notifications...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {notifications.map((notification) => {
+              const style = typeStyle[notification.type];
+              const Icon = style.icon;
+
+              return (
+                <div
+                  key={notification.id}
+                  className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-all ${
+                    notification.read
+                      ? "border-gray-100"
+                      : "border-l-4 border-b-gray-100 border-l-[#40b594] border-r-gray-100 border-t-gray-100"
+                  } hover:border-l-[#40b594] hover:shadow-md`}
+                >
+                  <div className="p-7">
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${style.iconBg}`}>
+                          <Icon size={18} className={style.iconColor} />
+                        </div>
+
+                        <div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${style.badge}`}>
+                            {notification.type}
+                          </span>
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <Clock size={12} className="text-[#6b7f79]" />
+                            <span className="text-xs font-semibold text-[#6b7f79]">{notification.time}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!notification.read && <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-[#40b594]" />}
+                        <button
+                          type="button"
+                          onClick={() => markOneRead(notification.id)}
+                          className="rounded-lg p-1.5 text-[#6b7f79] transition-all hover:bg-[#f0f4f3] hover:text-[#071a15]"
+                        >
+                          <MoreVertical size={18} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="ml-1 pl-13">
+                      <h3 className="mb-1 text-base font-extrabold leading-snug text-[#071a15]">
+                        {notification.title}
+                      </h3>
+                      <p className="text-sm font-medium leading-relaxed text-[#4a5a55]">
+                        {notification.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between">
+                      <button
+                        type="button"
+                        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all ${style.button}`}
+                      >
+                        {notification.actionText}
+                        <ArrowRight size={16} />
+                      </button>
+
+                      {!notification.read && (
+                        <button
+                          type="button"
+                          onClick={() => markOneRead(notification.id)}
+                          className="text-xs font-bold text-[#6b7f79] transition-colors hover:text-[#40b594]"
+                        >
+                          Mark as read
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!loading && notifications.length === 0 && (
+          <div className="py-24 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <Bell size={28} className="text-[#40b594]" />
+            </div>
+            <p className="text-lg font-extrabold text-[#071a15]">All caught up!</p>
+            <p className="mt-1 text-sm text-[#4a5a55]">No new notifications right now.</p>
+          </div>
+        )}
       </main>
     </div>
   );
-};
-
-export default NotificationsInterviews;
+}
