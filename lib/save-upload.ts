@@ -1,34 +1,26 @@
-import { mkdir, writeFile } from "fs/promises";
-import { randomUUID } from "crypto";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { randomUUID } from "crypto";
+
+const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
 export async function saveUpload(
-  file: File | null,
-  folder: string,
-  allowedTypes?: string[],
-  maxSize = 10 * 1024 * 1024
-) {
-  if (!file || file.size === 0) return null;
-
-  if (allowedTypes && !allowedTypes.includes(file.type)) {
-    throw new Error("Unsupported file type");
-  }
-
-  if (file.size > maxSize) {
-    throw new Error("File too large");
-  }
-
+  file: File,
+  subfolder: string = ""
+): Promise<{ url: string; fileName: string }> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const fileName = `${randomUUID()}.${ext}`;
-  const uploadDir = path.join(process.cwd(), "public", "uploads", folder);
+  const ext = file.name.split(".").pop() || "bin";
+  const uniqueName = `${randomUUID()}.${ext}`;
+  const targetDir = subfolder
+    ? path.join(UPLOAD_DIR, subfolder)
+    : UPLOAD_DIR;
 
-  await mkdir(uploadDir, { recursive: true });
-  await writeFile(path.join(uploadDir, fileName), buffer);
+  await mkdir(targetDir, { recursive: true });
+  await writeFile(path.join(targetDir, uniqueName), buffer);
 
-  return {
-    url: `/uploads/${folder}/${fileName}`,
-    fileName: file.name,
-    mimeType: file.type,
-  };
+  const url = subfolder
+    ? `/uploads/${subfolder}/${uniqueName}`
+    : `/uploads/${uniqueName}`;
+
+  return { url, fileName: file.name };
 }

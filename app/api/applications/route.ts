@@ -1,70 +1,60 @@
-import { NextRequest, NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+// app/api/applications/route.ts
+import { NextResponse } from "next/server";
+import { eq, and, desc } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
-  employerProfiles,
-  interviews,
   jobApplications,
   jobs,
   jobSeekerProfiles,
+  users,
 } from "@/app/db/schema";
-import { requireUser } from "@/lib/current-user";
+import { requireEmployer } from "@/lib/require-employer";
 
-export async function GET(req: NextRequest) {
-  const auth = await requireUser();
-  if ("error" in auth) return auth.error;
+export async function GET(req: Request) {
+  const auth = await requireEmployer();
+  if (auth.error) return auth.error;
 
-  if (auth.user.role === "job_seeker") {
-    const rows = await db
-      .select({
-        id: jobApplications.id,
-        status: jobApplications.status,
-        appliedAt: jobApplications.appliedAt,
-        updatedAt: jobApplications.updatedAt,
-        jobTitle: jobs.title,
-        company: employerProfiles.companyName,
-        description: jobs.description,
-        salaryMin: jobs.salaryMin,
-        salaryMax: jobs.salaryMax,
-        employmentType: jobs.employmentType,
-        arrangement: jobs.arrangement,
-        experienceLevel: jobs.experienceLevel,
-      })
-      .from(jobApplications)
-      .innerJoin(jobs, eq(jobs.id, jobApplications.jobId))
-      .innerJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
-      .where(eq(jobApplications.jobSeekerId, auth.user.userId))
-      .orderBy(desc(jobApplications.appliedAt));
+  const { searchParams } = new URL(req.url);
+  const jobId = searchParams.get("jobId");
+  const status = searchParams.get("status");
 
-    return NextResponse.json(rows);
+  const conditions = [eq(jobApplications.employerId, auth.user.id)];
+  if (jobId) conditions.push(eq(jobApplications.jobId, jobId));
+  if (status && ["pending", "accepted", "rejected", "interview", "withdrawn"].includes(status)) {
+    conditions.push(eq(jobApplications.status, status as any));
   }
 
-  const jobId = req.nextUrl.searchParams.get("jobId");
-
-  const rows = await db
+  const list = await db
     .select({
       id: jobApplications.id,
+      jobId: jobApplications.jobId,
+      jobTitle: jobs.title,
       status: jobApplications.status,
-      appliedAt: jobApplications.appliedAt,
-      updatedAt: jobApplications.updatedAt,
       coverLetter: jobApplications.coverLetter,
       cvUrl: jobApplications.cvUrl,
       cvFileName: jobApplications.cvFileName,
-      jobId: jobs.id,
-      jobTitle: jobs.title,
-      applicantId: jobSeekerProfiles.userId,
+      appliedAt: jobApplications.appliedAt,
+      jobSeekerId: jobApplications.jobSeekerId,
       firstName: jobSeekerProfiles.firstName,
       lastName: jobSeekerProfiles.lastName,
       profileImage: jobSeekerProfiles.profileImage,
-      description: jobSeekerProfiles.description,
       contact: jobSeekerProfiles.contact,
+      description: jobSeekerProfiles.description,
+      educationLevel: jobSeekerProfiles.educationLevel,
+      schoolUniversity: jobSeekerProfiles.schoolUniversity,
+      year: jobSeekerProfiles.year,
+      address: jobSeekerProfiles.address,
+      email: users.email,
     })
     .from(jobApplications)
     .innerJoin(jobs, eq(jobs.id, jobApplications.jobId))
-    .innerJoin(jobSeekerProfiles, eq(jobSeekerProfiles.userId, jobApplications.jobSeekerId))
-    .where(eq(jobApplications.employerId, auth.user.userId))
+    .leftJoin(
+      jobSeekerProfiles,
+      eq(jobSeekerProfiles.userId, jobApplications.jobSeekerId)
+    )
+    .leftJoin(users, eq(users.id, jobApplications.jobSeekerId))
+    .where(and(...conditions))
     .orderBy(desc(jobApplications.appliedAt));
 
-  const filtered = jobId ? rows.filter((row) => row.jobId === jobId) : rows;
-  return NextResponse.json(filtered);
+  return NextResponse.json(list);
 }

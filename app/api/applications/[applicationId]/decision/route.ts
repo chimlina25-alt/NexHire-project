@@ -1,73 +1,78 @@
-import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/db";
-import { interviews, jobApplications, jobs, notifications } from "@/app/db/schema";
-import { requireUser } from "@/lib/current-user";
+import { jobApplications, notifications } from "@/app/db/schema";
+import { eq, and } from "drizzle-orm";
+import { getCurrentUser } from "@/lib/auth";
 
-export async function POST(req: Request, { params }: { params: { applicationId: string } }) {
-  const auth = await requireUser("employer");
-  if ("error" in auth) return auth.error;
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { applicationId: string } }
+) {
+  try {
+    const user = await getCurrentUser("auth");
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (user.role !== "employer") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-  const body = await req.json();
-  const decision = body.decision as "accepted" | "rejected" | "interview";
+    const body = await req.json();
+    const { decision } = body;
 
-  const [application] = await db
-    .select()
-    .from(jobApplications)
-    .where(eq(jobApplications.id, params.applicationId))
-    .limit(1);
+    if (!["accepted", "rejected"].includes(decision)) {
+      return NextResponse.json(
+        { error: "Decision must be 'accepted' or 'rejected'" },
+        { status: 400 }
+      );
+    }
 
-  if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
-  if (application.employerId !== auth.user.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+    // Verify this application belongs to this employer
+    const [application] = await db
+      .select()
+      .from(jobApplications)
+      .where(
+        and(
+          eq(jobApplications.id, params.applicationId),
+          eq(jobApplications.employerId, user.id)
+        )
+      )
+      .limit(1);
 
-  const [job] = await db.select().from(jobs).where(eq(jobs.id, application.jobId)).limit(1);
+    if (!application) {
+      return NextResponse.json(
+        { error: "Application not found" },
+        { status: 404 }
+      );
+    }
 
-  await db
-    .update(jobApplications)
-    .set({ status: decision, updatedAt: new Date() })
-    .where(eq(jobApplications.id, application.id));
+    // Update status
+    await db
+      .update(jobApplications)
+      .set({
+        status:    decision as "accepted" | "rejected",
+        updatedAt: new Date(),
+      })
+      .where(eq(jobApplications.id, params.applicationId));
 
-  if (decision === "interview") {
-    await db.insert(interviews).values({
-      applicationId: application.id,
-      employerId: application.employerId,
-      jobSeekerId: application.jobSeekerId,
-      mode: body.mode ?? "remote",
-      scheduledAt: new Date(body.scheduledAt),
-      location: body.location ?? "",
-      notes: body.notes ?? "",
+    // Notify job seeker
+    const isAccepted = decision === "accepted";
+    await db.insert(notifications).values({
+      recipientId: application.jobSeekerId,
+      actorId:     user.id,
+      type:        "application",
+      title:       isAccepted
+        ? "Your application was accepted!"
+        : "Application update",
+      description: isAccepted
+        ? "Congratulations! The employer has accepted your application and will be in touch soon."
+        : "Thank you for applying. The employer has decided not to move forward with your application at this time.",
+      link: `/applied`,
     });
+
+    return NextResponse.json({ success: true, status: decision });
+  } catch (error) {
+    console.error("[POST /api/applications/[applicationId]/decision]", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
-
-  const titleMap = {
-    accepted: `Application accepted for ${job?.title ?? "your application"}`,
-    rejected: `Application update for ${job?.title ?? "your application"}`,
-    interview: `Interview scheduled for ${job?.title ?? "your application"}`,
-  };
-
-  const descriptionMap = {
-    accepted: body.message || "The employer accepted your application.",
-    rejected: body.message || "The employer did not move forward with your application.",
-    interview: body.message || `Interview scheduled on ${body.scheduledAt}.`,
-  };
-
-  await db.insert(notifications).values({
-    recipientId: application.jobSeekerId,
-    actorId: auth.user.userId,
-    type: decision === "interview" ? "interview" : "application",
-    title: titleMap[decision],
-    description: descriptionMap[decision],
-    link: decision === "interview" ? "/interviews" : "/applied",
-    meta: {
-      applicationId: application.id,
-      jobId: application.jobId,
-      decision,
-      scheduledAt: body.scheduledAt ?? null,
-      location: body.location ?? null,
-    },
-  });
-
-  return NextResponse.json({ ok: true });
 }

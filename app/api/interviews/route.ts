@@ -1,76 +1,119 @@
-import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/db";
-import { employerProfiles, interviews, jobApplications, jobs } from "@/app/db/schema";
-import { requireUser } from "@/lib/current-user";
+import {
+  interviews,
+  jobApplications,
+  notifications,
+} from "@/app/db/schema";
+import { eq, and } from "drizzle-orm";
+import { getCurrentUser } from "@/lib/auth";
 
-function employmentTypeLabel(value: string | null) {
-  if (value === "full_time") return "Full time";
-  if (value === "part_time") return "Part time";
-  if (value === "contract") return "Contract";
-  if (value === "freelance") return "Freelance";
-  if (value === "internship") return "Internship";
-  return "";
-}
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getCurrentUser("auth");
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (user.role !== "employer") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-function experienceLabel(value: string | null) {
-  if (value === "entry") return "Entry level";
-  if (value === "mid") return "Mid level";
-  if (value === "senior") return "Senior";
-  if (value === "lead") return "Lead / Manager";
-  if (value === "executive") return "Executive";
-  return "";
+    const body = await req.json();
+    const { applicationId, mode, scheduledAt, location, notes } = body;
+
+    if (!applicationId || !scheduledAt) {
+      return NextResponse.json(
+        { error: "applicationId and scheduledAt are required" },
+        { status: 400 }
+      );
+    }
+
+    // Verify application belongs to this employer
+    const [application] = await db
+      .select()
+      .from(jobApplications)
+      .where(
+        and(
+          eq(jobApplications.id, applicationId),
+          eq(jobApplications.employerId, user.id)
+        )
+      )
+      .limit(1);
+
+    if (!application) {
+      return NextResponse.json(
+        { error: "Application not found" },
+        { status: 404 }
+      );
+    }
+
+    const [interview] = await db
+      .insert(interviews)
+      .values({
+        applicationId,
+        employerId:   user.id,
+        jobSeekerId:  application.jobSeekerId,
+        mode:         mode || "remote",
+        scheduledAt:  new Date(scheduledAt),
+        location:     location || null,
+        notes:        notes    || null,
+      })
+      .returning();
+
+    // Update application status to interview
+    await db
+      .update(jobApplications)
+      .set({ status: "interview", updatedAt: new Date() })
+      .where(eq(jobApplications.id, applicationId));
+
+    // Notify job seeker
+    const interviewDate = new Date(scheduledAt).toLocaleString("en-US", {
+      weekday: "long",
+      month:   "long",
+      day:     "numeric",
+      year:    "numeric",
+      hour:    "numeric",
+      minute:  "2-digit",
+    });
+
+    await db.insert(notifications).values({
+      recipientId: application.jobSeekerId,
+      actorId:     user.id,
+      type:        "interview",
+      title:       "Interview Scheduled!",
+      description: `Your interview has been scheduled for ${interviewDate}. ${
+        location ? `Location/Link: ${location}.` : ""
+      } ${notes ? notes : ""}`.trim(),
+      link: `/interviews`,
+    });
+
+    return NextResponse.json(interview, { status: 201 });
+  } catch (error) {
+    console.error("[POST /api/interviews]", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
 }
 
 export async function GET() {
-  const auth = await requireUser();
-  if ("error" in auth) return auth.error;
+  try {
+    const user = await getCurrentUser("auth");
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  if (auth.user.role === "job_seeker") {
     const rows = await db
-      .select({
-        id: interviews.id,
-        scheduledAt: interviews.scheduledAt,
-        location: interviews.location,
-        mode: interviews.mode,
-        jobTitle: jobs.title,
-        company: employerProfiles.companyName,
-        salaryMin: jobs.salaryMin,
-        salaryMax: jobs.salaryMax,
-        employmentType: jobs.employmentType,
-        experienceLevel: jobs.experienceLevel,
-      })
+      .select()
       .from(interviews)
-      .innerJoin(jobApplications, eq(jobApplications.id, interviews.applicationId))
-      .innerJoin(jobs, eq(jobs.id, jobApplications.jobId))
-      .innerJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
-      .where(eq(interviews.jobSeekerId, auth.user.userId))
-      .orderBy(desc(interviews.scheduledAt));
+      .where(
+        user.role === "employer"
+          ? eq(interviews.employerId, user.id)
+          : eq(interviews.jobSeekerId, user.id)
+      )
+      .orderBy(interviews.scheduledAt);
 
-    return NextResponse.json(
-      rows.map((row) => ({
-        ...row,
-        employmentTypeLabel: employmentTypeLabel(row.employmentType),
-        experienceLabel: experienceLabel(row.experienceLevel),
-      }))
-    );
+    return NextResponse.json(rows);
+  } catch (error) {
+    console.error("[GET /api/interviews]", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
-
-  const rows = await db
-    .select({
-      id: interviews.id,
-      scheduledAt: interviews.scheduledAt,
-      location: interviews.location,
-      mode: interviews.mode,
-      applicationId: interviews.applicationId,
-      jobTitle: jobs.title,
-      firstName: jobApplications.jobSeekerId,
-    })
-    .from(interviews)
-    .innerJoin(jobApplications, eq(jobApplications.id, interviews.applicationId))
-    .innerJoin(jobs, eq(jobs.id, jobApplications.jobId))
-    .where(eq(interviews.employerId, auth.user.userId))
-    .orderBy(desc(interviews.scheduledAt));
-
-  return NextResponse.json(rows);
 }

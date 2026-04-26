@@ -18,19 +18,24 @@ import {
   Briefcase,
   ExternalLink,
   UserCog,
-  Phone,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const EmployerSettings = () => {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("general");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [deleteText, setDeleteText] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const [settings, setSettings] = useState({
-    adminEmail: "admin@nexhire.com",
-    billingEmail: "billing@nexhire.com",
+    adminEmail: "",
+    billingEmail: "",
   });
 
   const tabs = [
@@ -43,6 +48,50 @@ const EmployerSettings = () => {
     "w-full rounded-xl border border-gray-200 bg-[#f8faf9] px-4 py-3 text-sm font-medium text-[#071a15] placeholder-[#9ab0aa] transition-all focus:border-[#40b594] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30";
 
   const labelClass = "mb-2 block text-sm font-extrabold text-[#071a15]";
+
+  const handleSignOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  };
+
+  const handleSaveEmails = async () => {
+    setSavingEmail(true);
+    await new Promise((r) => setTimeout(r, 500));
+    setSavingEmail(false);
+    alert("Email settings saved");
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      alert("Please fill in both password fields");
+      return;
+    }
+    if (newPassword.length < 8) {
+      alert("New password must be at least 8 characters");
+      return;
+    }
+    setSavingPassword(true);
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: newPassword, confirmPassword: newPassword }),
+    });
+    setSavingPassword(false);
+    if (res.ok) {
+      alert("Password updated successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+    } else {
+      alert("Failed to update password");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteText !== "DELETE") return;
+    const res = await fetch("/api/auth/logout", { method: "POST" });
+    alert("Account deletion requested. Contact support.");
+    router.push("/login");
+  };
 
   return (
     <div className="min-h-screen bg-[#f0f4f3] pb-16 font-sans">
@@ -115,8 +164,8 @@ const EmployerSettings = () => {
                           ? "bg-red-50 text-red-600"
                           : "bg-[#f0f9f6] text-[#071a15]"
                         : isDanger
-                          ? "text-red-400 hover:bg-red-50 hover:text-red-600"
-                          : "text-[#4a5a55] hover:bg-[#f8faf9] hover:text-[#071a15]"
+                        ? "text-red-400 hover:bg-red-50 hover:text-red-600"
+                        : "text-[#4a5a55] hover:bg-[#f8faf9] hover:text-[#071a15]"
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -138,14 +187,13 @@ const EmployerSettings = () => {
                                   ? "text-red-600"
                                   : "text-[#40b594]"
                                 : isDanger
-                                  ? "text-red-400"
-                                  : "text-[#6b7f79]"
+                                ? "text-red-400"
+                                : "text-[#6b7f79]"
                             }
                           />
                         </div>
                         {tab.name}
                       </div>
-
                       {isActive && (
                         <ChevronRight
                           size={16}
@@ -158,7 +206,10 @@ const EmployerSettings = () => {
               })}
             </div>
 
-            <button className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm font-bold text-[#4a5a55] shadow-sm transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600">
+            <button
+              onClick={handleSignOut}
+              className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm font-bold text-[#4a5a55] shadow-sm transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f0f4f3]">
                 <LogOut size={16} className="text-[#6b7f79]" />
               </div>
@@ -178,13 +229,6 @@ const EmployerSettings = () => {
                   </div>
 
                   <div className="p-8">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <SummaryCard icon={Building2} label="Company Name" value="NexHire Solutions" />
-                      <SummaryCard icon={Globe} label="Website" value="www.nexhire.com" />
-                      <SummaryCard icon={MapPin} label="Location" value="Phnom Penh, Cambodia" />
-                      <SummaryCard icon={Briefcase} label="Active Jobs" value="12 Open Positions" />
-                    </div>
-
                     <div className="mt-6 rounded-2xl border border-[#d1e8e3] bg-[#f0f9f6] p-5">
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -192,7 +236,7 @@ const EmployerSettings = () => {
                             Edit company profile from the real profile page
                           </p>
                           <p className="mt-1 text-sm font-medium text-[#4a5a55]">
-                            Keep branding, company details, photo, and files in one place instead of duplicating forms here.
+                            Keep branding, company details, photo, and files in one place.
                           </p>
                         </div>
                         <Link href="/employer_profile">
@@ -209,13 +253,16 @@ const EmployerSettings = () => {
                 <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                   <div className="border-b border-gray-100 px-8 py-6">
                     <h2 className="text-lg font-extrabold text-[#071a15]">Account Emails</h2>
-                    <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">
-                      Separate internal contact emails from public company profile information
-                    </p>
                   </div>
 
                   <div className="p-8">
-                    <form className="space-y-6">
+                    <form
+                      className="space-y-6"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSaveEmails();
+                      }}
+                    >
                       <div>
                         <label className={labelClass}>Admin Email</label>
                         <div className="relative">
@@ -229,9 +276,6 @@ const EmployerSettings = () => {
                             className={`${inputClass} pl-10`}
                           />
                         </div>
-                        <p className="ml-1 mt-2 text-xs font-semibold text-[#6b7f79]">
-                          Used for login, security, and workspace management
-                        </p>
                       </div>
 
                       <div>
@@ -247,18 +291,16 @@ const EmployerSettings = () => {
                             className={`${inputClass} pl-10`}
                           />
                         </div>
-                        <p className="ml-1 mt-2 text-xs font-semibold text-[#6b7f79]">
-                          Used for invoices and subscription communication
-                        </p>
                       </div>
 
                       <div className="pt-2">
                         <button
-                          type="button"
-                          className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23]"
+                          type="submit"
+                          disabled={savingEmail}
+                          className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23] disabled:opacity-60"
                         >
                           <Save size={16} />
-                          Save Changes
+                          {savingEmail ? "Saving..." : "Save Changes"}
                         </button>
                       </div>
                     </form>
@@ -277,13 +319,21 @@ const EmployerSettings = () => {
                 </div>
 
                 <div className="p-8">
-                  <form className="max-w-md space-y-6">
+                  <form
+                    className="max-w-md space-y-6"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleUpdatePassword();
+                    }}
+                  >
                     <div>
                       <label className={labelClass}>Current Password</label>
                       <div className="relative">
                         <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79]" />
                         <input
                           type={showCurrent ? "text" : "password"}
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
                           placeholder="Enter current password"
                           className={`${inputClass} pl-10 pr-10`}
                         />
@@ -303,6 +353,8 @@ const EmployerSettings = () => {
                         <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79]" />
                         <input
                           type={showNew ? "text" : "password"}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
                           placeholder="Enter new password"
                           className={`${inputClass} pl-10 pr-10`}
                         />
@@ -328,11 +380,12 @@ const EmployerSettings = () => {
 
                     <div className="pt-2">
                       <button
-                        type="button"
-                        className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23]"
+                        type="submit"
+                        disabled={savingPassword}
+                        className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23] disabled:opacity-60"
                       >
                         <Shield size={16} />
-                        Update Password
+                        {savingPassword ? "Updating..." : "Update Password"}
                       </button>
                     </div>
                   </form>
@@ -382,6 +435,7 @@ const EmployerSettings = () => {
 
                       <button
                         type="button"
+                        onClick={handleDeleteAccount}
                         disabled={deleteText !== "DELETE"}
                         className={`flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-extrabold transition-all ${
                           deleteText === "DELETE"

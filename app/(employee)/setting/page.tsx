@@ -67,7 +67,7 @@ const JobSeekerSettings = () => {
           <button className="border-b-2 border-[#40b594] pb-1 text-[#40b594]">Settings</button>
         </nav>
 
-        <Link href="/my_profile">
+        <Link href="/profile">
           <div className="group flex cursor-pointer items-center gap-3">
             <div className="text-right">
               <p className="text-[10px] uppercase tracking-wider text-gray-400">User name</p>

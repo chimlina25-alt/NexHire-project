@@ -4,31 +4,6 @@ import { db } from "@/app/db";
 import { employerProfiles, jobApplications, jobs } from "@/app/db/schema";
 import { requireUser } from "@/lib/current-user";
 
-function employmentTypeLabel(value: string | null) {
-  if (value === "full_time") return "Full time";
-  if (value === "part_time") return "Part time";
-  if (value === "contract") return "Contract";
-  if (value === "freelance") return "Freelance";
-  if (value === "internship") return "Internship";
-  return "";
-}
-
-function arrangementLabel(value: string | null) {
-  if (value === "on_site") return "On-site";
-  if (value === "remote") return "Remote";
-  if (value === "hybrid") return "Hybrid";
-  return "";
-}
-
-function experienceLabel(value: string | null) {
-  if (value === "entry") return "Entry level";
-  if (value === "mid") return "Mid level";
-  if (value === "senior") return "Senior";
-  if (value === "lead") return "Lead / Manager";
-  if (value === "executive") return "Executive";
-  return "";
-}
-
 export async function GET() {
   const auth = await requireUser("job_seeker");
   if ("error" in auth) return auth.error;
@@ -57,12 +32,5 @@ export async function GET() {
     (row) => row.status === "withdrawn" || row.status === "rejected"
   );
 
-  return NextResponse.json(
-    archived.map((row) => ({
-      ...row,
-      employmentTypeLabel: employmentTypeLabel(row.employmentType),
-      arrangementLabel: arrangementLabel(row.arrangement),
-      experienceLabel: experienceLabel(row.experienceLevel),
-    }))
-  );
+  return NextResponse.json(archived);
 }

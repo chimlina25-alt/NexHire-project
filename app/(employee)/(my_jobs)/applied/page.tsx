@@ -15,16 +15,23 @@ type AppliedJob = {
   status: string;
 };
 
+function formatSalary(min: number | null, max: number | null) {
+  if (!min && !max) return "Negotiable";
+  if (min && max) return `$${(min / 1000).toFixed(0)}k - $${(max / 1000).toFixed(0)}k`;
+  if (min) return `From $${(min / 1000).toFixed(0)}k`;
+  return `Up to $${(max! / 1000).toFixed(0)}k`;
+}
+
 const MyApplicationsApplied = () => {
   const pathname = usePathname();
   const [appliedJobs, setAppliedJobs] = useState<AppliedJob[]>([]);
   const [loading, setLoading] = useState(true);
 
   const tabs = [
-    { name: "Saved", path: "/saved", count: 0 },
-    { name: "Applied", path: "/applied", count: 0 },
-    { name: "Interviews", path: "/interviews", count: 0 },
-    { name: "Archived", path: "/archived", count: 0 },
+    { name: "Saved", path: "/saved" },
+    { name: "Applied", path: "/applied" },
+    { name: "Interviews", path: "/interviews" },
+    { name: "Archived", path: "/archived" },
   ];
 
   useEffect(() => {
@@ -34,20 +41,22 @@ const MyApplicationsApplied = () => {
         const data = await res.json();
         if (!res.ok) return;
 
-        const mapped = (data || []).map((item: any) => ({
-          id: item.id,
-          title: item.jobTitle,
-          company: item.company,
-          description: item.description || "",
-          salary:
-            item.salaryMin || item.salaryMax
-              ? `$${item.salaryMin ?? 0} - $${item.salaryMax ?? 0}`
-              : "Negotiable",
-          tags: [item.status],
-          status: item.status,
-        }));
+        const mapped = (data || [])
+          .filter(
+            (item: any) =>
+              item.status !== "withdrawn" && item.status !== "rejected"
+          )
+          .map((item: any) => ({
+            id: item.id,
+            title: item.jobTitle,
+            company: item.company,
+            description: item.description ?? "",
+            salary: formatSalary(item.salaryMin, item.salaryMax),
+            tags: [item.status],
+            status: item.status,
+          }));
 
-        setAppliedJobs(mapped.filter((job: AppliedJob) => job.status !== "interview" && job.status !== "withdrawn"));
+        setAppliedJobs(mapped);
       } catch (error) {
         console.error(error);
       } finally {
@@ -58,6 +67,12 @@ const MyApplicationsApplied = () => {
     fetchApplied();
   }, []);
 
+  const statusColor: Record<string, string> = {
+    pending: "bg-yellow-50 text-yellow-700",
+    accepted: "bg-green-50 text-green-700",
+    interview: "bg-blue-50 text-blue-700",
+  };
+
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
       <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
@@ -67,11 +82,21 @@ const MyApplicationsApplied = () => {
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <Link href="/home_page"><button className="hover:text-gray-300 transition-colors">Home</button></Link>
-          <Link href="/saved"><button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">My Jobs</button></Link>
-          <Link href="/message"><button className="hover:text-gray-300 transition-colors">Messages</button></Link>
-          <Link href="/notification"><button className="hover:text-gray-300 transition-colors">Notification</button></Link>
-          <Link href="/setting"><button className="hover:text-gray-300 transition-colors">Settings</button></Link>
+          <Link href="/home_page">
+            <button className="hover:text-gray-300 transition-colors">Home</button>
+          </Link>
+          <Link href="/saved">
+            <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">My Jobs</button>
+          </Link>
+          <Link href="/message">
+            <button className="hover:text-gray-300 transition-colors">Messages</button>
+          </Link>
+          <Link href="/notification">
+            <button className="hover:text-gray-300 transition-colors">Notification</button>
+          </Link>
+          <Link href="/setting">
+            <button className="hover:text-gray-300 transition-colors">Settings</button>
+          </Link>
         </nav>
 
         <Link href="/profile">
@@ -80,7 +105,9 @@ const MyApplicationsApplied = () => {
               <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
               <p className="text-sm font-bold">Profile</p>
             </div>
-            <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
+            <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">
+              U
+            </div>
           </div>
         </Link>
       </header>
@@ -101,9 +128,13 @@ const MyApplicationsApplied = () => {
                     isActive ? "text-[#153a30]" : "text-gray-400 hover:text-gray-600"
                   }`}
                 >
-                  <span className="text-xs font-bold mb-1">{tab.name === "Applied" ? appliedJobs.length : 0}</span>
+                  <span className="text-xs font-bold mb-1">
+                    {tab.name === "Applied" ? appliedJobs.length : 0}
+                  </span>
                   <span className="text-lg font-bold">{tab.name}</span>
-                  {isActive && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#153a30] rounded-full"></div>}
+                  {isActive && (
+                    <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#153a30] rounded-full" />
+                  )}
                 </button>
               </Link>
             );
@@ -112,8 +143,12 @@ const MyApplicationsApplied = () => {
 
         <div className="flex gap-8 mb-8 text-sm font-bold text-gray-600">
           <span>Total: {appliedJobs.length}</span>
-          <span>Accepted: {appliedJobs.filter((j) => j.status === "accepted").length}</span>
-          <span>Rejected: {appliedJobs.filter((j) => j.status === "rejected").length}</span>
+          <span>
+            Accepted: {appliedJobs.filter((j) => j.status === "accepted").length}
+          </span>
+          <span>
+            Interview: {appliedJobs.filter((j) => j.status === "interview").length}
+          </span>
         </div>
 
         {loading ? (
@@ -130,7 +165,11 @@ const MyApplicationsApplied = () => {
                     <p className="text-gray-400 text-sm font-bold mb-4">{job.company}</p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="bg-[#e4f6f1] text-[#153a30] px-4 py-1.5 rounded-full font-bold text-xs border border-[#40b594]/20">
+                    <span
+                      className={`px-4 py-1.5 rounded-full font-bold text-xs ${
+                        statusColor[job.status] ?? "bg-gray-100 text-gray-600"
+                      }`}
+                    >
                       {job.status}
                     </span>
                     <button className="text-gray-400 hover:text-black transition-colors">
@@ -143,16 +182,6 @@ const MyApplicationsApplied = () => {
 
                 <div className="flex items-center gap-6">
                   <span className="text-lg font-extrabold text-[#1a1a1a]">{job.salary}</span>
-                  <div className="flex gap-2">
-                    {job.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="bg-[#153a30] text-white text-[10px] font-bold px-3 py-1.5 rounded-md uppercase tracking-wider"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
                 </div>
               </div>
             ))}

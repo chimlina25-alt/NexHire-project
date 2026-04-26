@@ -1,106 +1,106 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { messageDeletes, messages } from "@/app/db/schema";
+import { messages, messageDeletes } from "@/app/db/schema";
+import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 
-const EDIT_WINDOW_MS = 15 * 60 * 1000;
-
+// PATCH — edit your own message within 15 minutes
 export async function PATCH(
   req: NextRequest,
-  context: { params: Promise<{ messageId: string }> }
+  { params }: { params: { messageId: string } }
 ) {
   try {
-    const me = await getCurrentUser("auth");
-
-    if (!me) {
+    const user = await getCurrentUser("auth");
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const { messageId } = await context.params;
-    const body = await req.json();
 
     const [message] = await db
       .select()
       .from(messages)
-      .where(eq(messages.id, messageId))
+      .where(
+        and(
+          eq(messages.id, params.messageId),
+          eq(messages.senderId, user.id)
+        )
+      )
       .limit(1);
 
     if (!message) {
-      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Message not found or you did not send it" },
+        { status: 404 }
+      );
     }
 
-    if (message.senderId !== me.id) {
-      return NextResponse.json({ error: "Only sender can edit" }, { status: 403 });
+    const ageMs = Date.now() - new Date(message.createdAt).getTime();
+    if (ageMs > 15 * 60 * 1000) {
+      return NextResponse.json(
+        { error: "Edit window of 15 minutes has expired" },
+        { status: 403 }
+      );
     }
 
-    const tooLate =
-      Date.now() - new Date(message.createdAt).getTime() > EDIT_WINDOW_MS;
+    const body = await req.json();
+    const text = body.text?.trim();
 
-    if (tooLate) {
-      return NextResponse.json({ error: "Edit window expired" }, { status: 400 });
+    if (!text) {
+      return NextResponse.json(
+        { error: "text is required" },
+        { status: 400 }
+      );
     }
 
     const [updated] = await db
       .update(messages)
-      .set({
-        text: body.text,
-        editedAt: new Date(),
-      })
-      .where(eq(messages.id, messageId))
+      .set({ text, editedAt: new Date() })
+      .where(eq(messages.id, params.messageId))
       .returning();
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("EDIT MESSAGE ERROR:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
-    );
+    console.error("[PATCH /api/messages/[messageId]]", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
 
+// DELETE — soft-delete for this user only (other participant still sees it)
 export async function DELETE(
-  _: NextRequest,
-  context: { params: Promise<{ messageId: string }> }
+  _req: NextRequest,
+  { params }: { params: { messageId: string } }
 ) {
   try {
-    const me = await getCurrentUser("auth");
-
-    if (!me) {
+    const user = await getCurrentUser("auth");
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { messageId } = await context.params;
-
+    // Confirm the message actually exists
     const [message] = await db
       .select()
       .from(messages)
-      .where(eq(messages.id, messageId))
+      .where(eq(messages.id, params.messageId))
       .limit(1);
 
     if (!message) {
-      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Message not found" },
+        { status: 404 }
+      );
     }
 
+    // Insert soft-delete record; unique index prevents duplicates silently
     await db
       .insert(messageDeletes)
       .values({
-        messageId: message.id,
-        userId: me.id,
+        messageId: params.messageId,
+        userId:    user.id,
       })
       .onConflictDoNothing();
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("DELETE MESSAGE ERROR:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
-    );
+    console.error("[DELETE /api/messages/[messageId]]", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

@@ -38,10 +38,10 @@ export default function UserNavProfile() {
 
   return (
     <Link href={profilePath}>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 cursor-pointer">
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wider text-gray-400">User name</p>
-          <p className="text-sm font-bold truncate max-w-[140px]">{displayName}</p>
+          <p className="text-sm font-bold truncate max-w-[140px] text-white">{displayName}</p>
         </div>
 
         <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2d4f45] font-bold text-white">

@@ -8,8 +8,12 @@ import {
   Briefcase,
   PlusCircle,
   ChevronDown,
+  CheckCircle,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
+import EmployerNavProfile from "@/components/ui/EmployerNavProfile";
 
 const categoryOptions = [
   "IT & Software",
@@ -35,6 +39,75 @@ const locationOptions = [
   "Remote",
   "Other",
 ];
+
+type ToastType = "success" | "error";
+
+type Toast = {
+  id: number;
+  type: ToastType;
+  message: string;
+};
+
+function useToast() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const show = (message: string, type: ToastType = "success") => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  const remove = (id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  return { toasts, show, remove };
+}
+
+function ToastContainer({
+  toasts,
+  onRemove,
+}: {
+  toasts: Toast[];
+  onRemove: (id: number) => void;
+}) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg border min-w-[280px] max-w-sm ${
+            toast.type === "success"
+              ? "bg-white border-green-200"
+              : "bg-white border-red-200"
+          }`}
+        >
+          {toast.type === "success" ? (
+            <CheckCircle size={18} className="text-green-500 shrink-0" />
+          ) : (
+            <AlertCircle size={18} className="text-red-500 shrink-0" />
+          )}
+          <p
+            className={`text-sm font-bold flex-1 ${
+              toast.type === "success" ? "text-green-700" : "text-red-700"
+            }`}
+          >
+            {toast.message}
+          </p>
+          <button
+            onClick={() => onRemove(toast.id)}
+            className="text-gray-400 hover:text-gray-600 shrink-0"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Combobox({
   placeholder,
@@ -104,28 +177,32 @@ type DraftJob = {
   lastSaved: string;
 };
 
+const emptyForm = {
+  title: "",
+  category: "",
+  location: "",
+  arrangement: "",
+  employmentType: "",
+  experienceLevel: "",
+  salaryMin: "",
+  salaryMax: "",
+  applicationDeadline: "",
+  description: "",
+  requirements: "",
+  applicationPlatform: "",
+  externalApplyLink: "",
+  contactEmail: "",
+  status: "active",
+};
+
 const PostJob = () => {
+  const { toasts, show, remove } = useToast();
   const [activeTab, setActiveTab] = useState<"post" | "drafts">("post");
   const [loading, setLoading] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftData, setDraftData] = useState<DraftJob[]>([]);
-  const [form, setForm] = useState({
-    title: "",
-    category: "",
-    location: "",
-    arrangement: "",
-    employmentType: "",
-    experienceLevel: "",
-    salaryMin: "",
-    salaryMax: "",
-    applicationDeadline: "",
-    description: "",
-    requirements: "",
-    applicationPlatform: "",
-    externalApplyLink: "",
-    contactEmail: "",
-    status: "active",
-  });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
 
   const inputClass =
     "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all";
@@ -139,38 +216,55 @@ const PostJob = () => {
     form.arrangement === "On-site"
       ? "on_site"
       : form.arrangement === "Remote"
-        ? "remote"
-        : form.arrangement === "Hybrid"
-          ? "hybrid"
-          : "on_site";
+      ? "remote"
+      : form.arrangement === "Hybrid"
+      ? "hybrid"
+      : "on_site";
 
   const employmentValue =
     form.employmentType === "Full-time"
       ? "full_time"
       : form.employmentType === "Part-time"
-        ? "part_time"
-        : form.employmentType === "Contract"
-          ? "contract"
-          : form.employmentType === "Freelance"
-            ? "freelance"
-            : form.employmentType === "Internship"
-              ? "internship"
-              : "full_time";
+      ? "part_time"
+      : form.employmentType === "Contract"
+      ? "contract"
+      : form.employmentType === "Freelance"
+      ? "freelance"
+      : form.employmentType === "Internship"
+      ? "internship"
+      : "full_time";
 
   const experienceValue =
     form.experienceLevel === "Entry Level"
       ? "entry"
       : form.experienceLevel === "Mid Level"
-        ? "mid"
-        : form.experienceLevel === "Senior"
-          ? "senior"
-          : form.experienceLevel === "Lead / Manager"
-            ? "lead"
-            : form.experienceLevel === "Executive"
-              ? "executive"
-              : "entry";
+      ? "mid"
+      : form.experienceLevel === "Senior"
+      ? "senior"
+      : form.experienceLevel === "Lead / Manager"
+      ? "lead"
+      : form.experienceLevel === "Executive"
+      ? "executive"
+      : "entry";
 
   const handleSubmit = async (status: "active" | "draft") => {
+    if (!form.title.trim()) {
+      show("Job title is required.", "error");
+      return;
+    }
+    if (!form.category.trim()) {
+      show("Job category is required.", "error");
+      return;
+    }
+    if (!form.location.trim()) {
+      show("Location is required.", "error");
+      return;
+    }
+    if (!form.description.trim()) {
+      show("Job description is required.", "error");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -197,37 +291,27 @@ const PostJob = () => {
       });
 
       const data = await res.json();
+
       if (!res.ok) {
-        alert(data.error || "Failed to save job");
+        show(data.error ?? "Failed to save job. Please try again.", "error");
         return;
       }
 
-      alert(status === "active" ? "Job published successfully" : "Draft saved");
+      show(
+        status === "active"
+          ? "Job published successfully!"
+          : "Draft saved successfully!",
+        "success"
+      );
 
-      setForm({
-        title: "",
-        category: "",
-        location: "",
-        arrangement: "",
-        employmentType: "",
-        experienceLevel: "",
-        salaryMin: "",
-        salaryMax: "",
-        applicationDeadline: "",
-        description: "",
-        requirements: "",
-        applicationPlatform: "",
-        externalApplyLink: "",
-        contactEmail: "",
-        status: "active",
-      });
+      setForm(emptyForm);
 
       if (status === "draft") {
         await loadDrafts();
         setActiveTab("drafts");
       }
-    } catch (error) {
-      console.error("POST JOB ERROR:", error);
+    } catch {
+      show("Something went wrong. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -241,19 +325,36 @@ const PostJob = () => {
       if (!res.ok) return;
 
       const drafts = (data || [])
-        .filter((job: any) => job.status === "draft")
-        .map((job: any) => ({
+        .filter((job: { status: string }) => job.status === "draft")
+        .map((job: { id: string; title: string; category: string; postedAt: string; createdAt: string }) => ({
           id: job.id,
           title: job.title,
           category: job.category,
-          lastSaved: new Date(job.postedAt).toLocaleString(),
+          lastSaved: new Date(job.postedAt ?? job.createdAt).toLocaleString(),
         }));
 
       setDraftData(drafts);
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setDraftLoading(false);
+    }
+  };
+
+  const handleDeleteDraft = async (jobId: string) => {
+    try {
+      setDeletingId(jobId);
+      const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+      if (res.ok) {
+        setDraftData((prev) => prev.filter((d) => d.id !== jobId));
+        show("Draft deleted.", "success");
+      } else {
+        show("Failed to delete draft.", "error");
+      }
+    } catch {
+      show("Something went wrong.", "error");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -263,32 +364,33 @@ const PostJob = () => {
 
   return (
     <div className="min-h-screen font-sans pb-16" style={{ background: "#f0f4f3" }}>
+
+      <ToastContainer toasts={toasts} onRemove={remove} />
+
       <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-lg">
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
           <span className="text-xl font-extrabold tracking-tight">NexHire</span>
         </div>
-
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold">
-          <Link href="/dashboard"><button className="text-gray-300 hover:text-white transition-colors">Dashboard</button></Link>
+          <Link href="/dashboard">
+            <button className="text-gray-300 hover:text-white transition-colors">Dashboard</button>
+          </Link>
           <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Post Job</button>
-          <Link href="/employer_message"><button className="text-gray-300 hover:text-white transition-colors">Messages</button></Link>
-          <Link href="/employer_notification"><button className="text-gray-300 hover:text-white transition-colors">Notification</button></Link>
-          <Link href="/subscription"><button className="text-gray-300 hover:text-white transition-colors">Subscription</button></Link>
-          <Link href="/employer_setting"><button className="text-gray-300 hover:text-white transition-colors">Settings</button></Link>
+          <Link href="/employer_message">
+            <button className="text-gray-300 hover:text-white transition-colors">Messages</button>
+          </Link>
+          <Link href="/employer_notification">
+            <button className="text-gray-300 hover:text-white transition-colors">Notification</button>
+          </Link>
+          <Link href="/subscription">
+            <button className="text-gray-300 hover:text-white transition-colors">Subscription</button>
+          </Link>
+          <Link href="/employer_setting">
+            <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
+          </Link>
         </nav>
-
-        <Link href="/employer_profile">
-          <div className="flex items-center gap-3 cursor-pointer group">
-            <div className="text-right">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest">Company</p>
-              <p className="text-sm font-bold text-white group-hover:text-[#40b594] transition-colors">Profile</p>
-            </div>
-            <div className="w-10 h-10 bg-[#40b594] rounded-full flex items-center justify-center font-extrabold text-[#051612] text-sm">
-              C
-            </div>
-          </div>
-        </Link>
+        <EmployerNavProfile />
       </header>
 
       <main className="max-w-7xl mx-auto px-6 md:px-10 py-10">
@@ -329,7 +431,9 @@ const PostJob = () => {
 
                 <div className="space-y-6">
                   <div>
-                    <label className={labelClass}>Job Title <span className="text-red-500">*</span></label>
+                    <label className={labelClass}>
+                      Job Title <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       value={form.title}
@@ -340,7 +444,9 @@ const PostJob = () => {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Job Category <span className="text-red-500">*</span></label>
+                    <label className={labelClass}>
+                      Job Category <span className="text-red-500">*</span>
+                    </label>
                     <Combobox
                       placeholder="e.g. Design, Marketing, IT & Software"
                       options={categoryOptions}
@@ -352,7 +458,9 @@ const PostJob = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className={labelClass}>Location <span className="text-red-500">*</span></label>
+                      <label className={labelClass}>
+                        Location <span className="text-red-500">*</span>
+                      </label>
                       <Combobox
                         placeholder="e.g. Phnom Penh, Remote"
                         options={locationOptions}
@@ -448,7 +556,9 @@ const PostJob = () => {
                     <input
                       type="date"
                       value={form.applicationDeadline}
-                      onChange={(e) => setForm((p) => ({ ...p, applicationDeadline: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, applicationDeadline: e.target.value }))
+                      }
                       className={inputClass}
                     />
                   </div>
@@ -456,7 +566,9 @@ const PostJob = () => {
               </section>
 
               <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Job Description</h2>
+                <h2 className="text-lg font-extrabold text-[#071a15] mb-2">
+                  Job Description <span className="text-red-500">*</span>
+                </h2>
                 <p className="text-xs text-[#6b7f79] font-semibold mb-5">
                   Describe the role, responsibilities, and what success looks like
                 </p>
@@ -493,7 +605,9 @@ const PostJob = () => {
                     <label className={labelClass}>Application Platform</label>
                     <select
                       value={form.applicationPlatform}
-                      onChange={(e) => setForm((p) => ({ ...p, applicationPlatform: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, applicationPlatform: e.target.value }))
+                      }
                       className={selectClass}
                     >
                       <option value="">Select platform</option>
@@ -508,7 +622,9 @@ const PostJob = () => {
                     <input
                       type="text"
                       value={form.externalApplyLink}
-                      onChange={(e) => setForm((p) => ({ ...p, externalApplyLink: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, externalApplyLink: e.target.value }))
+                      }
                       placeholder="https://yoursite.com/apply"
                       className={inputClass}
                     />
@@ -519,14 +635,18 @@ const PostJob = () => {
                     <input
                       type="email"
                       value={form.contactEmail}
-                      onChange={(e) => setForm((p) => ({ ...p, contactEmail: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, contactEmail: e.target.value }))
+                      }
                       placeholder="careers@company.com"
                       className={inputClass}
                     />
                   </div>
 
                   <div className="pt-2">
-                    <label className="block text-sm font-extrabold text-[#071a15] mb-3">Visibility</label>
+                    <label className="block text-sm font-extrabold text-[#071a15] mb-3">
+                      Visibility
+                    </label>
                     <div className="grid grid-cols-2 gap-3">
                       {["Public Now", "Save as Draft"].map((opt) => (
                         <label
@@ -564,38 +684,20 @@ const PostJob = () => {
                     disabled={loading}
                     className="w-full bg-[#051612] text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-[#0d2a23] transition-all shadow-sm disabled:opacity-60"
                   >
-                    {loading ? "Saving..." : "Publish Job"}
+                    {loading ? "Publishing..." : "Publish Job"}
                   </button>
                   <button
                     onClick={() => handleSubmit("draft")}
                     disabled={loading}
                     className="w-full bg-[#f0f4f3] text-[#071a15] py-3.5 rounded-xl font-extrabold text-sm border border-[#d1e8e3] hover:bg-[#d1e8e3] transition-all disabled:opacity-60"
                   >
-                    Save as Draft
+                    {loading ? "Saving..." : "Save as Draft"}
                   </button>
                   <button
-                    onClick={() =>
-                      setForm({
-                        title: "",
-                        category: "",
-                        location: "",
-                        arrangement: "",
-                        employmentType: "",
-                        experienceLevel: "",
-                        salaryMin: "",
-                        salaryMax: "",
-                        applicationDeadline: "",
-                        description: "",
-                        requirements: "",
-                        applicationPlatform: "",
-                        externalApplyLink: "",
-                        contactEmail: "",
-                        status: "active",
-                      })
-                    }
+                    onClick={() => setForm(emptyForm)}
                     className="w-full text-[#6b7f79] py-2 rounded-xl font-bold text-sm hover:text-[#071a15] transition-all"
                   >
-                    Cancel
+                    Clear Form
                   </button>
                 </div>
               </section>
@@ -611,21 +713,37 @@ const PostJob = () => {
                   Saved drafts
                 </p>
                 <h2 className="text-xl font-extrabold text-[#071a15] mt-0.5">
-                  {draftData.length} unfinished posts
+                  {draftData.length} unfinished {draftData.length === 1 ? "post" : "posts"}
                 </h2>
               </div>
               <button
                 onClick={() => setActiveTab("post")}
                 className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all shadow-sm"
               >
-                <PlusCircle size={17} /> New Post
+                <PlusCircle size={17} />
+                New Post
               </button>
             </div>
 
             {draftLoading ? (
-              <div className="text-sm text-[#6b7f79]">Loading drafts...</div>
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="bg-white border border-gray-100 rounded-2xl p-6 animate-pulse">
+                    <div className="h-4 bg-gray-100 rounded w-1/3 mb-3" />
+                    <div className="h-3 bg-gray-100 rounded w-1/4" />
+                  </div>
+                ))}
+              </div>
             ) : draftData.length === 0 ? (
-              <div className="text-sm text-[#6b7f79]">No drafts saved.</div>
+              <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
+                <div className="w-14 h-14 bg-[#f0f9f6] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#d1e8e3]">
+                  <Briefcase size={24} className="text-[#40b594]" />
+                </div>
+                <p className="font-extrabold text-[#071a15]">No drafts yet</p>
+                <p className="text-sm text-[#6b7f79] mt-1">
+                  Save a job as draft and it will appear here.
+                </p>
+              </div>
             ) : (
               <div className="space-y-4">
                 {draftData.map((draft) => (
@@ -634,29 +752,38 @@ const PostJob = () => {
                     className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center justify-between group hover:border-[#40b594] hover:shadow-md transition-all shadow-sm"
                   >
                     <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3] flex-shrink-0">
+                      <div className="w-12 h-12 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3] shrink-0">
                         <Briefcase size={22} className="text-[#40b594]" />
                       </div>
                       <div>
-                        <h3 className="text-base font-extrabold text-[#071a15]">{draft.title}</h3>
+                        <h3 className="text-base font-extrabold text-[#071a15]">
+                          {draft.title}
+                        </h3>
                         <div className="flex items-center gap-4 mt-1">
                           <span className="text-xs font-bold text-[#40b594] bg-[#f0f9f6] px-2.5 py-1 rounded-lg border border-[#d1e8e3]">
                             {draft.category}
                           </span>
                           <div className="flex items-center gap-1.5 text-[#6b7f79] text-xs font-semibold">
-                            <Clock size={13} /> {draft.lastSaved}
+                            <Clock size={13} />
+                            {draft.lastSaved}
                           </div>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-red-50 hover:text-red-500 transition-all">
+                      <button
+                        onClick={() => handleDeleteDraft(draft.id)}
+                        disabled={deletingId === draft.id}
+                        className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
+                        title="Delete draft"
+                      >
                         <Trash2 size={18} />
                       </button>
                       <Link href={`/jobs/${draft.id}`}>
                         <button className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all">
-                          <FileEdit size={16} /> View Draft
+                          <FileEdit size={16} />
+                          View Draft
                         </button>
                       </Link>
                     </div>

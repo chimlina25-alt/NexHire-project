@@ -1,81 +1,91 @@
+// app/api/jobs/[id]/route.ts
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { employerProfiles, jobs } from "@/app/db/schema";
-import { requireUser } from "@/lib/current-user";
+import { jobs } from "@/app/db/schema";
+import { requireEmployer } from "@/lib/require-employer";
 
-export async function GET(_: Request, { params }: { params: { jobId: string } }) {
-  const [job] = await db
-    .select({
-      id: jobs.id,
-      employerId: jobs.employerId,
-      title: jobs.title,
-      category: jobs.category,
-      location: jobs.location,
-      arrangement: jobs.arrangement,
-      type: jobs.employmentType,
-      experience: jobs.experienceLevel,
-      description: jobs.description,
-      requirements: jobs.requirements,
-      salaryMin: jobs.salaryMin,
-      salaryMax: jobs.salaryMax,
-      deadline: jobs.applicationDeadline,
-      contactEmail: jobs.contactEmail,
-      applicationPlatform: jobs.applicationPlatform,
-      externalApplyLink: jobs.externalApplyLink,
-      status: jobs.status,
-      createdAt: jobs.createdAt,
-      company: employerProfiles.companyName,
-      companyDescription: employerProfiles.companyDescription,
-      companyImage: employerProfiles.profileImage,
-      companyWebsite: employerProfiles.websiteLink,
-    })
-    .from(jobs)
-    .innerJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
-    .where(eq(jobs.id, params.jobId))
-    .limit(1);
+const updateSchema = z.object({
+  title: z.string().min(1).optional(),
+  category: z.string().optional(),
+  location: z.string().optional(),
+  arrangement: z.enum(["on_site", "remote", "hybrid"]).optional(),
+  employmentType: z
+    .enum(["full_time", "part_time", "contract", "freelance", "internship"])
+    .optional(),
+  experienceLevel: z
+    .enum(["entry", "mid", "senior", "lead", "executive"])
+    .optional(),
+  salaryMin: z.number().nullable().optional(),
+  salaryMax: z.number().nullable().optional(),
+  description: z.string().optional(),
+  requirements: z.string().nullable().optional(),
+  applicationDeadline: z.string().nullable().optional(),
+  applicationPlatform: z.string().optional(),
+  externalApplyLink: z.string().nullable().optional(),
+  contactEmail: z.string().nullable().optional(),
+  status: z.enum(["draft", "active", "closed"]).optional(),
+});
 
-  if (!job) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
-  }
-
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(job);
 }
 
-export async function PATCH(req: Request, { params }: { params: { jobId: string } }) {
-  const auth = await requireUser("employer");
-  if ("error" in auth) return auth.error;
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const auth = await requireEmployer();
+  if (auth.error) return auth.error;
+
+  const [existing] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (existing.employerId !== auth.user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await req.json();
+  const parsed = updateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+  }
 
-  const [existing] = await db.select().from(jobs).where(eq(jobs.id, params.jobId)).limit(1);
-  if (!existing) return NextResponse.json({ error: "Job not found" }, { status: 404 });
-  if (existing.employerId !== auth.user.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const data: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
+  if (parsed.data.applicationDeadline) {
+    data.applicationDeadline = new Date(parsed.data.applicationDeadline);
   }
 
   const [updated] = await db
     .update(jobs)
-    .set({
-      title: body.title ?? existing.title,
-      category: body.category ?? existing.category,
-      location: body.location ?? existing.location,
-      arrangement: body.arrangement ?? existing.arrangement,
-      employmentType: body.employmentType ?? existing.employmentType,
-      experienceLevel: body.experienceLevel ?? existing.experienceLevel,
-      salaryMin: body.salaryMin ?? existing.salaryMin,
-      salaryMax: body.salaryMax ?? existing.salaryMax,
-      description: body.description ?? existing.description,
-      requirements: body.requirements ?? existing.requirements,
-      applicationDeadline: body.applicationDeadline ? new Date(body.applicationDeadline) : existing.applicationDeadline,
-      applicationPlatform: body.applicationPlatform ?? existing.applicationPlatform,
-      externalApplyLink: body.externalApplyLink ?? existing.externalApplyLink,
-      contactEmail: body.contactEmail ?? existing.contactEmail,
-      status: body.status ?? existing.status,
-      updatedAt: new Date(),
-    })
-    .where(eq(jobs.id, params.jobId))
+    .set(data)
+    .where(eq(jobs.id, id))
     .returning();
 
   return NextResponse.json(updated);
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const auth = await requireEmployer();
+  if (auth.error) return auth.error;
+
+  const [existing] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (existing.employerId !== auth.user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  await db.delete(jobs).where(eq(jobs.id, id));
+  return NextResponse.json({ success: true });
 }

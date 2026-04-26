@@ -1,118 +1,142 @@
-import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, isNull } from "drizzle-orm";
+// app/api/conversations/route.ts
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { eq, or, and, desc } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
   conversations,
   employerProfiles,
   jobSeekerProfiles,
+  messages,
 } from "@/app/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser } from "@/lib/require-employer";
 
 export async function GET() {
-  try {
-    const me = await getCurrentUser("auth");
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
 
-    if (!me) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const list = await db
+    .select()
+    .from(conversations)
+    .where(
+      or(
+        eq(conversations.employerId, auth.user.id),
+        eq(conversations.jobSeekerId, auth.user.id)
+      )
+    )
+    .orderBy(desc(conversations.lastMessageAt));
 
-    const rows = await db
-      .select({
-        id: conversations.id,
-        employerId: conversations.employerId,
-        jobSeekerId: conversations.jobSeekerId,
-        jobId: conversations.jobId,
-        lastMessageAt: conversations.lastMessageAt,
-        employerName: employerProfiles.companyName,
-        employerImage: employerProfiles.profileImage,
-        seekerFirstName: jobSeekerProfiles.firstName,
-        seekerLastName: jobSeekerProfiles.lastName,
-        seekerImage: jobSeekerProfiles.profileImage,
-      })
-      .from(conversations)
-      .innerJoin(
-        employerProfiles,
-        eq(employerProfiles.userId, conversations.employerId)
-      )
-      .innerJoin(
-        jobSeekerProfiles,
-        eq(jobSeekerProfiles.userId, conversations.jobSeekerId)
-      )
-      .where(
-        me.role === "employer"
-          ? eq(conversations.employerId, me.id)
-          : eq(conversations.jobSeekerId, me.id)
-      )
-      .orderBy(desc(conversations.lastMessageAt));
+  const enriched = await Promise.all(
+    list.map(async (c) => {
+      const peerIsEmployer = c.employerId !== auth.user.id;
+      const peerId = peerIsEmployer ? c.employerId : c.jobSeekerId;
 
-    return NextResponse.json(rows);
-  } catch (error) {
-    console.error("GET CONVERSATIONS ERROR:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
-    );
-  }
+      let peerName = "User";
+      let peerImage: string | null = null;
+      let peerRole = peerIsEmployer ? "Employer" : "Job Seeker";
+
+      if (peerIsEmployer) {
+        const [ep] = await db
+          .select()
+          .from(employerProfiles)
+          .where(eq(employerProfiles.userId, peerId))
+          .limit(1);
+        peerName = ep?.companyName || "Employer";
+        peerImage = ep?.profileImage || null;
+        peerRole = ep?.industry || "Employer";
+      } else {
+        const [jsp] = await db
+          .select()
+          .from(jobSeekerProfiles)
+          .where(eq(jobSeekerProfiles.userId, peerId))
+          .limit(1);
+        peerName = jsp ? `${jsp.firstName} ${jsp.lastName}` : "Job Seeker";
+        peerImage = jsp?.profileImage || null;
+      }
+
+      const [lastMsg] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, c.id))
+        .orderBy(desc(messages.createdAt))
+        .limit(1);
+
+      return {
+        id: c.id,
+        jobId: c.jobId,
+        lastMessageAt: c.lastMessageAt,
+        peerId,
+        peerName,
+        peerImage,
+        peerRole,
+        lastMessage: lastMsg?.text || null,
+        lastMessageAtFormatted: lastMsg?.createdAt || c.lastMessageAt,
+      };
+    })
+  );
+
+  return NextResponse.json(enriched);
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const me = await getCurrentUser("auth");
+const createSchema = z.object({
+  peerId: z.string().uuid(),
+  jobId: z.string().uuid().nullable().optional(),
+  initialMessage: z.string().optional(),
+});
 
-    if (!me) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export async function POST(req: Request) {
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
 
-    const body = await req.json();
+  const body = await req.json();
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+  }
 
-    const employerId = me.role === "employer" ? me.id : body.employerId;
-    const jobSeekerId = me.role === "job_seeker" ? me.id : body.jobSeekerId;
-    const jobId = body.jobId ?? null;
+  // Determine which side is the employer based on the current user's role
+  const employerId =
+    auth.user.role === "employer" ? auth.user.id : parsed.data.peerId;
+  const jobSeekerId =
+    auth.user.role === "employer" ? parsed.data.peerId : auth.user.id;
 
-    if (!employerId || !jobSeekerId) {
-      return NextResponse.json(
-        { error: "Missing employer or job seeker" },
-        { status: 400 }
-      );
-    }
-
-    const existingRows = await db
-      .select()
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.employerId, employerId),
-          eq(conversations.jobSeekerId, jobSeekerId),
-          jobId ? eq(conversations.jobId, jobId) : isNull(conversations.jobId)
-        )
+  const [existing] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.employerId, employerId),
+        eq(conversations.jobSeekerId, jobSeekerId)
       )
-      .limit(1);
+    )
+    .limit(1);
 
-    const existing = existingRows[0];
-    if (existing) {
-      return NextResponse.json(existing);
-    }
-
-    const [conversation] = await db
+  let conversationId: string;
+  if (existing) {
+    conversationId = existing.id;
+  } else {
+    const [created] = await db
       .insert(conversations)
       .values({
         employerId,
         jobSeekerId,
-        jobId,
-        lastMessageAt: new Date(),
+        jobId: parsed.data.jobId ?? null,
       })
       .returning();
-
-    return NextResponse.json(conversation, { status: 201 });
-  } catch (error) {
-    console.error("CREATE CONVERSATION ERROR:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
-    );
+    conversationId = created.id;
   }
+
+  if (parsed.data.initialMessage) {
+    await db.insert(messages).values({
+      conversationId,
+      senderId: auth.user.id,
+      text: parsed.data.initialMessage,
+    });
+    await db
+      .update(conversations)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(conversations.id, conversationId));
+  }
+
+  return NextResponse.json({ id: conversationId });
 }
