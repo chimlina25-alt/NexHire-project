@@ -1,200 +1,162 @@
 "use client";
 
 import React, { useRef } from 'react';
-import { LayoutDashboard, Users, Settings, Plus, Eye, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Plus, Eye, FileText, Bell, MessageSquare, MoreVertical } from 'lucide-react';
 import Link from 'next/link';
 
 const EmployerDashboard = () => {
+  const applicantsRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ Scroll target
-const applicantsRef = useRef<HTMLDivElement | null>(null);
-
-  // ✅ Scroll function
   const handleScrollToApplicants = () => {
     applicantsRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans pb-12">
-
-      {/* HEADER NAVIGATION */}
-      <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-white font-sans pb-20 text-[#1A1A1A]">
+      
+      {/* UPDATED NAVIGATION BAR - MATCHES YOUR IMAGE */}
+      <header className="bg-[#021a15] text-white px-12 py-3 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
+          {/* Logo and Name in a straight line */}
+          <img src="/logo.png" alt="NexHire" className="w-8 h-8 object-contain" />
           <span className="text-xl font-bold tracking-tight">NexHire</span>
         </div>
         
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">
-            Dashboard
-          </button>
-          <Link href="/post_job">
-             <button className="hover:text-gray-300 transition-colors">Post Job</button>
-           </Link> 
-           <Link href="/employer_message">
-          <button className="hover:text-gray-300 transition-colors">Messages</button>
-          </Link>
-          <Link href="/subscription">
-            <button className="hover:text-gray-300 transition-colors">Subscription</button>
-          </Link>
-          <Link href="/employer_notification">
-          <button className="hover:text-gray-300 transition-colors">Notification</button>
-         </Link>
+        <nav className="hidden md:flex items-center gap-2">
+          <Link href="/" className="px-5 py-2 text-sm font-medium hover:text-gray-300 transition-colors">Home</Link>
+          {/* Active State Pill */}
+          <button className="px-5 py-2 text-sm font-medium bg-[#0b2b24] rounded-full text-white">My Jobs</button>
+          <Link href="/employer_message" className="px-5 py-2 text-sm font-medium hover:text-gray-300 transition-colors">Messages</Link>
+          <Link href="/employer_notification" className="px-5 py-2 text-sm font-medium hover:text-gray-300 transition-colors">Notifications</Link>
+          <Link href="/setting" className="px-5 py-2 text-sm font-medium hover:text-gray-300 transition-colors">Settings</Link>
         </nav>
 
         <div className="flex items-center gap-4">
-          <div className="text-right">
-            <Link href="/employer_profile">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
-              <p className="text-sm font-bold">Profile</p>
-            </Link>
+          <div className="text-right leading-tight">
+            <p className="text-[12px] font-medium">User name</p>
+            <p className="text-[10px] text-gray-400">Profile</p>
           </div>
-          <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
-          <Link href="/setting">
-            <Settings className="text-gray-400 cursor-pointer hover:text-white transition-colors" size={24} />
-          </Link>
+          <div className="w-9 h-9 bg-[#1a3a34] rounded-full flex items-center justify-center font-bold text-white border border-white/10">
+            U
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-8 md:p-12">
-        <h1 className="text-4xl font-bold text-[#1a1a1a] mb-10">Welcome Company1 !</h1>
+      {/* REST OF YOUR DASHBOARD CONTENT */}
+      <main className="max-w-7xl mx-auto px-12 py-16">
+        <div className="mb-12">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Welcome back, Company1</h1>
+          <p className="text-gray-500">Manage your recruitment pipeline and job postings.</p>
+        </div>
 
-        {/* WHITE MAIN CONTAINER */}
-        <div className="bg-white rounded-[35px] shadow-sm border border-gray-100 p-8 md:p-12">
-          
-          {/* SUMMARY STATS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            <div className="bg-[#eef7f6] p-10 rounded-[20px] flex flex-col items-center">
-              <div className="bg-[#a6d5cb] p-4 rounded-xl mb-4">
-                <FileText className="text-white" size={40} />
+        {/* SUMMARY STATS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          {[
+            { label: 'Total Jobs Posted', value: '5', icon: FileText, color: 'text-[#00966B]', bg: 'bg-[#eef7f6]' },
+            { label: 'Total Applicants', value: '32', icon: Users, color: 'text-black', bg: 'bg-gray-100' },
+            { label: 'Active Jobs', value: '3', icon: LayoutDashboard, color: 'text-[#00966B]', bg: 'bg-[#dceae7]' },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white border border-gray-100 p-8 rounded-[24px] shadow-sm flex items-center gap-6">
+              <div className={`${stat.bg} ${stat.color} p-4 rounded-2xl`}>
+                <stat.icon size={32} />
               </div>
-              <p className="text-lg text-gray-700 font-medium">
-                Total Jobs Posted : <span className="font-bold text-2xl text-black ml-1">5</span>
-              </p>
-            </div>
-
-            <div className="bg-[#e7efec] p-10 rounded-[20px] flex flex-col items-center">
-              <div className="bg-black p-4 rounded-xl mb-4">
-                <Users className="text-white" size={40} />
-              </div>
-              <p className="text-lg text-gray-700 font-medium">
-                Total Applicants: <span className="font-bold text-2xl text-black ml-1">32</span>
-              </p>
-            </div>
-
-            <div className="bg-[#dceae7] p-10 rounded-[20px] flex flex-col items-center">
-              <div className="bg-[#00a37b] p-4 rounded-xl mb-4">
-                <LayoutDashboard className="text-white" size={40} />
-              </div>
-              <p className="text-lg text-gray-700 font-medium">
-                Active Jobs: <span className="font-bold text-2xl text-black ml-1">3</span>
-              </p>
-            </div>
-          </div>
-
-          {/* TOP SECTION */}
-          <div className="flex flex-col lg:flex-row gap-12 mb-16">
-
-            {/* RECENT JOBS */}
-            <div className="lg:w-2/3">
-              <h2 className="text-2xl font-bold mb-8">Recent Jobs</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="text-gray-400 text-sm border-b border-gray-100">
-                      <th className="pb-4 font-semibold">Job title</th>
-                      <th className="pb-4 font-semibold">Category</th>
-                      <th className="pb-4 font-semibold">Location</th>
-                      <th className="pb-4 font-semibold">Status</th>
-                      <th className="pb-4 font-semibold">Applicants</th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="text-sm">
-                    {[
-                      { title: 'Frontend Developer', cat: 'IT & Software', loc: 'Phnom Penh', status: 'Active', count: 12 },
-                      { title: 'UI/UX Designer', cat: 'Design', loc: 'Remote', status: 'Active', count: 8 },
-                      { title: 'Marketing Specialist', cat: 'Marketing', loc: 'Phnom Penh', status: 'Closed', count: 7 },
-                      { title: 'Sales Executive', cat: 'Sales', loc: 'Siem Reap', status: 'Active', count: 5 },
-                      { title: 'Data Analyst', cat: 'IT & Software', loc: 'Hybrid', status: 'Draft', count: 0 },
-                    ].map((job, idx) => (
-                      <tr key={idx} className="border-b border-gray-50 last:border-0">
-                        <td className="py-5 font-medium text-gray-700">{job.title}</td>
-                        <td className="py-5 text-gray-500">{job.cat}</td>
-                        <td className="py-5 text-gray-500">{job.loc}</td>
-                        <td className="py-5">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            job.status === 'Active' ? 'bg-green-100 text-green-600' : 
-                            job.status === 'Closed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {job.status}
-                          </span>
-                        </td>
-                        <td className="py-5 text-center font-bold">{job.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-
-                </table>
+              <div>
+                <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">{stat.label}</p>
+                <p className="text-3xl font-black">{stat.value}</p>
               </div>
             </div>
+          ))}
+        </div>
 
-            {/* QUICK ACTIONS */}
-            <div className="lg:w-1/3">
-              <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm sticky top-8">
-                <h2 className="text-2xl font-bold mb-8">Quick Actions</h2>
-
-                <div className="flex flex-col gap-5">
-                  <Link href="/post_job">
-                    <button className="w-full bg-[#153a30] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-[#0d2a23] transition-all">
-                      <Plus size={22} /> Post a New Job
-                    </button>
-                  </Link>
-
-                  {/* ✅ SCROLL BUTTON */}
-                  <button 
-                    onClick={handleScrollToApplicants}
-                    className="w-full border border-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 "
-                  >
-                    <Eye size={22} /> View Applicants
-                  </button>
-
-                  <button className="w-full border border-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50">
-                    <FileText size={22} /> Draft
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <hr className="border-gray-100 mb-12" />
-
-          {/* ✅ TARGET SECTION */}
-          <section ref={applicantsRef} className="w-full">
-            <h2 className="text-2xl font-bold mb-8">Recent Applicants</h2>
-
-            <div className="overflow-x-auto border border-gray-100 rounded-[30px] p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          {/* RECENT JOBS TABLE */}
+          <div className="lg:col-span-8 bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm">
+            <h2 className="text-2xl font-bold mb-8">Recent Job Postings</h2>
+            <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <tbody>
+                <thead>
+                  <tr className="text-gray-400 text-[11px] uppercase tracking-widest border-b border-gray-50">
+                    <th className="pb-4 font-bold">Job Title</th>
+                    <th className="pb-4 font-bold">Location</th>
+                    <th className="pb-4 font-bold">Status</th>
+                    <th className="pb-4 font-bold text-center">Applicants</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
                   {[
-                    { name: 'Rithy Kim', title: 'Frontend Developer', date: 'Apr 23, 2024', status: 'New' },
-                    { name: 'Nika Yem', title: 'Sales', date: 'Jan 02, 2024', status: 'New' },
-                    { name: 'Sokha Chan', title: 'UI/UX Designer', date: 'May 10, 2024', status: 'In Review' },
-                  ].map((applicant, idx) => (
-                    <tr key={idx}>
-                      <td className="py-6 px-4">{applicant.name}</td>
-                      <td className="py-6 px-4">{applicant.title}</td>
-                      <td className="py-6 px-4">{applicant.date}</td>
-                      <td className="py-6 px-4 text-[#00a37b] font-bold">{applicant.status}</td>
+                    { title: 'Frontend Developer', cat: 'IT', loc: 'Phnom Penh', status: 'Active', count: 12 },
+                    { title: 'UI/UX Designer', cat: 'Design', loc: 'Remote', status: 'Active', count: 8 },
+                    { title: 'Marketing Specialist', cat: 'Marketing', loc: 'Phnom Penh', status: 'Closed', count: 7 },
+                  ].map((job, idx) => (
+                    <tr key={idx} className="group hover:bg-gray-50/50 transition-colors">
+                      <td className="py-5 pr-4">
+                        <p className="font-bold text-gray-800">{job.title}</p>
+                        <p className="text-xs text-gray-400">{job.cat}</p>
+                      </td>
+                      <td className="py-5 text-gray-500 font-medium">{job.loc}</td>
+                      <td className="py-5">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                          job.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {job.status}
+                        </span>
+                      </td>
+                      <td className="py-5 text-center font-black text-lg">{job.count}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </section>
+          </div>
 
+          {/* QUICK ACTIONS */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="bg-[#051612] p-8 rounded-[32px] text-white shadow-xl relative overflow-hidden">
+              <h2 className="text-xl font-bold mb-6">Quick Actions</h2>
+              <div className="space-y-3">
+                <Link href="/post_job" className="w-full bg-[#00966B] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:scale-[1.02] transition-all">
+                  <Plus size={20} /> Post New Job
+                </Link>
+                <button 
+                  onClick={handleScrollToApplicants}
+                  className="w-full bg-white/10 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-white/20 transition-all border border-white/10"
+                >
+                  <Eye size={20} /> View Applicants
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* RECENT APPLICANTS SECTION */}
+        <section ref={applicantsRef} className="mt-20">
+          <h2 className="text-2xl font-bold mb-8">Recent Applicants</h2>
+          <div className="bg-white border border-gray-100 rounded-[32px] overflow-hidden shadow-sm">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50/50 text-gray-400 text-[11px] uppercase tracking-widest">
+                  <th className="py-4 px-8 font-bold">Candidate</th>
+                  <th className="py-4 px-8 font-bold">Applied For</th>
+                  <th className="py-4 px-8 font-bold">Date</th>
+                  <th className="py-4 px-8 font-bold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {[
+                  { name: 'Rithy Kim', title: 'Frontend Developer', date: 'Apr 23, 2024', status: 'New' },
+                  { name: 'Nika Yem', title: 'Sales Specialist', date: 'Jan 02, 2024', status: 'New' },
+                ].map((applicant, idx) => (
+                  <tr key={idx} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
+                    <td className="py-6 px-8 font-bold text-gray-800">{applicant.name}</td>
+                    <td className="py-6 px-8 text-gray-500">{applicant.title}</td>
+                    <td className="py-6 px-8 text-gray-400 italic">{applicant.date}</td>
+                    <td className="py-6 px-8 text-[#00966B] font-bold uppercase text-[11px] tracking-widest">{applicant.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
   );
