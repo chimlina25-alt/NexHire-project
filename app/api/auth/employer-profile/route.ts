@@ -49,10 +49,18 @@ export async function POST(req: Request) {
       image instanceof File ? await saveProfileImage(image) : null;
 
     await db.insert(employerProfiles).values({
-      userId: me.id,
-      profileImage,
-      ...parsed.data,
-    });
+  userId: me.id,
+  profileImage,
+  companyDescription: parsed.data.companyDescription,
+  companyName: parsed.data.companyName,
+  industry: parsed.data.industry,
+  companySize: parsed.data.companySize,
+  currentAddress: parsed.data.currentAddress,
+  foundedYear: parsed.data.foundedYear,
+  country: parsed.data.country,
+  contact: parsed.data.contact,
+  websiteLink: parsed.data.websiteLink,
+});
 
     await db
       .update(users)
