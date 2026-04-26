@@ -6,15 +6,66 @@ import {
   timestamp,
   pgEnum,
   jsonb,
+  integer,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["employer", "job_seeker"]);
+
 export const otpPurposeEnum = pgEnum("otp_purpose", [
   "signup",
   "login",
   "forgot_password",
   "google_signup",
   "google_login",
+]);
+
+export const jobArrangementEnum = pgEnum("job_arrangement", [
+  "on_site",
+  "remote",
+  "hybrid",
+]);
+
+export const employmentTypeEnum = pgEnum("employment_type", [
+  "full_time",
+  "part_time",
+  "contract",
+  "freelance",
+  "internship",
+]);
+
+export const experienceLevelEnum = pgEnum("experience_level", [
+  "entry",
+  "mid",
+  "senior",
+  "lead",
+  "executive",
+]);
+
+export const jobStatusEnum = pgEnum("job_status", [
+  "draft",
+  "active",
+  "closed",
+]);
+
+export const applicationStatusEnum = pgEnum("application_status", [
+  "pending",
+  "accepted",
+  "rejected",
+  "interview",
+  "withdrawn",
+]);
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "system",
+  "application",
+  "interview",
+  "message",
+]);
+
+export const interviewModeEnum = pgEnum("interview_mode", [
+  "remote",
+  "onsite",
 ]);
 
 export const users = pgTable("users", {
@@ -35,7 +86,7 @@ export const otpCodes = pgTable("otp_codes", {
   email: text("email").notNull(),
   codeHash: text("code_hash").notNull(),
   purpose: otpPurposeEnum("purpose").notNull(),
-  data: jsonb("data").$type<Record<string, any> | null>().default(null),
+  data: jsonb("data").$type<Record<string, unknown> | null>().default(null),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -63,6 +114,8 @@ export const employerProfiles = pgTable("employer_profiles", {
   country: text("country"),
   contact: text("contact"),
   websiteLink: text("website_link"),
+  companyFileName: text("company_file_name"),
+  companyFileUrl: text("company_file_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -78,5 +131,139 @@ export const jobSeekerProfiles = pgTable("job_seeker_profiles", {
   educationLevel: text("education_level"),
   schoolUniversity: text("school_university"),
   year: text("year"),
+  cvFileName: text("cv_file_name"),
+  cvUrl: text("cv_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const jobs = pgTable("jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  employerId: uuid("employer_id").notNull(),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  location: text("location").notNull(),
+  arrangement: jobArrangementEnum("arrangement").notNull().default("on_site"),
+  employmentType: employmentTypeEnum("employment_type").notNull().default("full_time"),
+  experienceLevel: experienceLevelEnum("experience_level").notNull().default("entry"),
+  salaryMin: integer("salary_min"),
+  salaryMax: integer("salary_max"),
+  description: text("description").notNull(),
+  requirements: text("requirements"),
+  applicationDeadline: timestamp("application_deadline", { withTimezone: true }),
+  applicationPlatform: text("application_platform").notNull().default("internal"),
+  externalApplyLink: text("external_apply_link"),
+  contactEmail: text("contact_email"),
+  status: jobStatusEnum("status").notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const savedJobs = pgTable(
+  "saved_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id").notNull(),
+    jobSeekerId: uuid("job_seeker_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    savedJobsUnique: uniqueIndex("saved_jobs_job_seeker_job_idx").on(
+      table.jobId,
+      table.jobSeekerId
+    ),
+  })
+);
+
+export const jobApplications = pgTable(
+  "job_applications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id").notNull(),
+    employerId: uuid("employer_id").notNull(),
+    jobSeekerId: uuid("job_seeker_id").notNull(),
+    status: applicationStatusEnum("status").notNull().default("pending"),
+    coverLetter: text("cover_letter"),
+    cvUrl: text("cv_url"),
+    cvFileName: text("cv_file_name"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    jobApplicationsUnique: uniqueIndex("job_applications_job_user_idx").on(
+      table.jobId,
+      table.jobSeekerId
+    ),
+  })
+);
+
+export const interviews = pgTable("interviews", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  employerId: uuid("employer_id").notNull(),
+  jobSeekerId: uuid("job_seeker_id").notNull(),
+  mode: interviewModeEnum("mode").notNull().default("remote"),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+  location: text("location"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  recipientId: uuid("recipient_id").notNull(),
+  actorId: uuid("actor_id"),
+  type: notificationTypeEnum("type").notNull().default("system"),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  link: text("link"),
+  meta: jsonb("meta").$type<Record<string, unknown> | null>().default(null),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    employerId: uuid("employer_id").notNull(),
+    jobSeekerId: uuid("job_seeker_id").notNull(),
+    jobId: uuid("job_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    conversationsUnique: uniqueIndex("conversations_employer_jobseeker_job_idx").on(
+      table.employerId,
+      table.jobSeekerId,
+      table.jobId
+    ),
+  })
+);
+
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull(),
+  senderId: uuid("sender_id").notNull(),
+  text: text("text"),
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
+  editedAt: timestamp("edited_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const messageDeletes = pgTable(
+  "message_deletes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    messageDeletesUnique: uniqueIndex("message_deletes_message_user_idx").on(
+      table.messageId,
+      table.userId
+    ),
+  })
+);
