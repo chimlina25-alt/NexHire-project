@@ -1,106 +1,98 @@
-// app/api/conversations/route.ts
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { eq, or, and, desc } from "drizzle-orm";
+import { eq, or, desc, and } from "drizzle-orm";
 import { db } from "@/app/db";
-import {
-  conversations,
-  employerProfiles,
-  jobSeekerProfiles,
-  messages,
-} from "@/app/db/schema";
-import { requireUser } from "@/lib/require-employer";
+import { conversations, messages, users, employerProfiles, jobSeekerProfiles } from "@/app/db/schema";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
-  const auth = await requireUser();
-  if (auth.error) return auth.error;
+  const user = await getCurrentUser("auth");
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const list = await db
-    .select()
-    .from(conversations)
-    .where(
-      or(
-        eq(conversations.employerId, auth.user.id),
-        eq(conversations.jobSeekerId, auth.user.id)
-      )
-    )
-    .orderBy(desc(conversations.lastMessageAt));
+  let convs;
+  if (user.role === "employer") {
+    convs = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.employerId, user.id))
+      .orderBy(desc(conversations.lastMessageAt));
+  } else {
+    convs = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.jobSeekerId, user.id))
+      .orderBy(desc(conversations.lastMessageAt));
+  }
 
   const enriched = await Promise.all(
-    list.map(async (c) => {
-      const peerIsEmployer = c.employerId !== auth.user.id;
-      const peerId = peerIsEmployer ? c.employerId : c.jobSeekerId;
+    convs.map(async (conv) => {
+      const otherId = user.role === "employer" ? conv.jobSeekerId : conv.employerId;
 
-      let peerName = "User";
-      let peerImage: string | null = null;
-      let peerRole = peerIsEmployer ? "Employer" : "Job Seeker";
+      const [otherUser] = await db.select().from(users).where(eq(users.id, otherId)).limit(1);
 
-      if (peerIsEmployer) {
-        const [ep] = await db
-          .select()
-          .from(employerProfiles)
-          .where(eq(employerProfiles.userId, peerId))
-          .limit(1);
-        peerName = ep?.companyName || "Employer";
-        peerImage = ep?.profileImage || null;
-        peerRole = ep?.industry || "Employer";
-      } else {
-        const [jsp] = await db
+      let otherName = otherUser?.email || "Unknown";
+      let otherImage: string | null = null;
+
+      if (user.role === "employer") {
+        const [seekerProfile] = await db
           .select()
           .from(jobSeekerProfiles)
-          .where(eq(jobSeekerProfiles.userId, peerId))
+          .where(eq(jobSeekerProfiles.userId, otherId))
           .limit(1);
-        peerName = jsp ? `${jsp.firstName} ${jsp.lastName}` : "Job Seeker";
-        peerImage = jsp?.profileImage || null;
+        if (seekerProfile) {
+          otherName = `${seekerProfile.firstName} ${seekerProfile.lastName}`;
+          otherImage = seekerProfile.profileImage;
+        }
+      } else {
+        const [empProfile] = await db
+          .select()
+          .from(employerProfiles)
+          .where(eq(employerProfiles.userId, otherId))
+          .limit(1);
+        if (empProfile) {
+          otherName = empProfile.companyName;
+          otherImage = empProfile.profileImage;
+        }
       }
 
-      const [lastMsg] = await db
+      const [lastMessage] = await db
         .select()
         .from(messages)
-        .where(eq(messages.conversationId, c.id))
+        .where(eq(messages.conversationId, conv.id))
         .orderBy(desc(messages.createdAt))
         .limit(1);
 
-      return {
-        id: c.id,
-        jobId: c.jobId,
-        lastMessageAt: c.lastMessageAt,
-        peerId,
-        peerName,
-        peerImage,
-        peerRole,
-        lastMessage: lastMsg?.text || null,
-        lastMessageAtFormatted: lastMsg?.createdAt || c.lastMessageAt,
-      };
+      return { ...conv, otherName, otherImage, otherUserId: otherId, lastMessage };
     })
   );
 
   return NextResponse.json(enriched);
 }
 
-const createSchema = z.object({
-  peerId: z.string().uuid(),
-  jobId: z.string().uuid().nullable().optional(),
-  initialMessage: z.string().optional(),
-});
-
 export async function POST(req: Request) {
-  const auth = await requireUser();
-  if (auth.error) return auth.error;
+  const user = await getCurrentUser("auth");
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+  const { otherUserId, jobId } = body;
+
+  if (!otherUserId) return NextResponse.json({ error: "otherUserId required" }, { status: 400 });
+
+  const [otherUser] = await db.select().from(users).where(eq(users.id, otherUserId)).limit(1);
+  if (!otherUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  let employerId: string;
+  let jobSeekerId: string;
+
+  if (user.role === "employer") {
+    employerId = user.id;
+    jobSeekerId = otherUserId;
+  } else {
+    employerId = otherUserId;
+    jobSeekerId = user.id;
   }
 
-  // Determine which side is the employer based on the current user's role
-  const employerId =
-    auth.user.role === "employer" ? auth.user.id : parsed.data.peerId;
-  const jobSeekerId =
-    auth.user.role === "employer" ? parsed.data.peerId : auth.user.id;
-
-  const [existing] = await db
+  // Check existing
+  const existing = await db
     .select()
     .from(conversations)
     .where(
@@ -111,32 +103,12 @@ export async function POST(req: Request) {
     )
     .limit(1);
 
-  let conversationId: string;
-  if (existing) {
-    conversationId = existing.id;
-  } else {
-    const [created] = await db
-      .insert(conversations)
-      .values({
-        employerId,
-        jobSeekerId,
-        jobId: parsed.data.jobId ?? null,
-      })
-      .returning();
-    conversationId = created.id;
-  }
+  if (existing[0]) return NextResponse.json(existing[0]);
 
-  if (parsed.data.initialMessage) {
-    await db.insert(messages).values({
-      conversationId,
-      senderId: auth.user.id,
-      text: parsed.data.initialMessage,
-    });
-    await db
-      .update(conversations)
-      .set({ lastMessageAt: new Date() })
-      .where(eq(conversations.id, conversationId));
-  }
+  const [conv] = await db
+    .insert(conversations)
+    .values({ employerId, jobSeekerId, jobId: jobId || null })
+    .returning();
 
-  return NextResponse.json({ id: conversationId });
+  return NextResponse.json(conv, { status: 201 });
 }

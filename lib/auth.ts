@@ -21,12 +21,7 @@ export async function comparePassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
 }
 
-
-
-export async function createSession(
-  userId: string,
-  type: "auth" | "reset" = "auth"
-) {
+export async function createSession(userId: string, type: "auth" | "reset" = "auth") {
   const rawToken = randomBytes(32).toString("hex");
   const tokenHash = hashText(rawToken);
   const expiresAt =
@@ -34,18 +29,12 @@ export async function createSession(
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       : new Date(Date.now() + 15 * 60 * 1000);
 
-  await db.insert(sessions).values({
-    userId,
-    tokenHash,
-    type,
-    expiresAt,
-  });
+  await db.insert(sessions).values({ userId, tokenHash, type, expiresAt });
 
   const cookieStore = await cookies();
-
   cookieStore.set(type === "auth" ? "session_token" : "reset_token", rawToken, {
     httpOnly: true,
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     expires: expiresAt,
@@ -57,36 +46,24 @@ export async function clearResetSession() {
   cookieStore.delete("reset_token");
 }
 
-
 export async function getCurrentUser(type: "auth" | "reset" = "auth") {
   const cookieStore = await cookies();
-
-  const rawToken = cookieStore.get(
-    type === "auth" ? "session_token" : "reset_token"
-  )?.value;
-
+  const rawToken = cookieStore.get(type === "auth" ? "session_token" : "reset_token")?.value;
   if (!rawToken) return null;
 
   const [session] = await db
     .select()
     .from(sessions)
-    .where(
-      and(
-        eq(sessions.tokenHash, hashText(rawToken)),
-        eq(sessions.type, type),
-        gt(sessions.expiresAt, new Date())
-      )
-    )
+    .where(and(
+      eq(sessions.tokenHash, hashText(rawToken)),
+      eq(sessions.type, type),
+      gt(sessions.expiresAt, new Date())
+    ))
     .limit(1);
 
   if (!session) return null;
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .limit(1);
-
+  const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
   return user ?? null;
 }
 
@@ -95,22 +72,18 @@ export function getRedirectByUser(user: {
   onboardingCompleted: boolean;
 }) {
   if (!user.role) return "/role_choosing";
-
   if (!user.onboardingCompleted) {
     return user.role === "employer" ? "/employer" : "/job_seeker";
   }
-
-  return user.role === "employer"
-    ? "/dashboard"
-    : "/home_page";
+  return user.role === "employer" ? "/dashboard" : "/home_page";
 }
+
 export async function createOtp(params: {
   email: string;
   purpose: "signup" | "login" | "forgot_password" | "google_signup" | "google_login";
   data?: Record<string, any>;
 }) {
   const code = generateOtp();
-
   await db.insert(otpCodes).values({
     email: params.email.toLowerCase(),
     codeHash: hashText(code),
@@ -118,7 +91,6 @@ export async function createOtp(params: {
     data: params.data ?? null,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
-
   return code;
 }
 
@@ -130,23 +102,17 @@ export async function verifyOtp(params: {
   const [record] = await db
     .select()
     .from(otpCodes)
-    .where(
-      and(
-        eq(otpCodes.email, params.email.toLowerCase()),
-        eq(otpCodes.codeHash, hashText(params.code)),
-        eq(otpCodes.purpose, params.purpose),
-        isNull(otpCodes.usedAt),
-        gt(otpCodes.expiresAt, new Date())
-      )
-    )
+    .where(and(
+      eq(otpCodes.email, params.email.toLowerCase()),
+      eq(otpCodes.codeHash, hashText(params.code)),
+      eq(otpCodes.purpose, params.purpose),
+      isNull(otpCodes.usedAt),
+      gt(otpCodes.expiresAt, new Date())
+    ))
     .limit(1);
 
   if (!record) return null;
 
-  await db
-    .update(otpCodes)
-    .set({ usedAt: new Date() })
-    .where(eq(otpCodes.id, record.id));
-
+  await db.update(otpCodes).set({ usedAt: new Date() }).where(eq(otpCodes.id, record.id));
   return record;
 }

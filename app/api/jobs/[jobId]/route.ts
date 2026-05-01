@@ -1,72 +1,85 @@
-// app/api/jobs/[id]/route.ts
 import { NextResponse } from "next/server";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { jobs } from "@/app/db/schema";
-import { requireEmployer } from "@/lib/require-employer";
-
-const updateSchema = z.object({
-  title: z.string().min(1).optional(),
-  category: z.string().optional(),
-  location: z.string().optional(),
-  arrangement: z.enum(["on_site", "remote", "hybrid"]).optional(),
-  employmentType: z
-    .enum(["full_time", "part_time", "contract", "freelance", "internship"])
-    .optional(),
-  experienceLevel: z
-    .enum(["entry", "mid", "senior", "lead", "executive"])
-    .optional(),
-  salaryMin: z.number().nullable().optional(),
-  salaryMax: z.number().nullable().optional(),
-  description: z.string().optional(),
-  requirements: z.string().nullable().optional(),
-  applicationDeadline: z.string().nullable().optional(),
-  applicationPlatform: z.string().optional(),
-  externalApplyLink: z.string().nullable().optional(),
-  contactEmail: z.string().nullable().optional(),
-  status: z.enum(["draft", "active", "closed"]).optional(),
-});
+import { jobs, employerProfiles } from "@/app/db/schema";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const { id } = await params;
-  const [job] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  const { jobId } = await params;
+
+  const [job] = await db
+    .select({
+      id: jobs.id,
+      title: jobs.title,
+      category: jobs.category,
+      location: jobs.location,
+      arrangement: jobs.arrangement,
+      employmentType: jobs.employmentType,
+      experienceLevel: jobs.experienceLevel,
+      salaryMin: jobs.salaryMin,
+      salaryMax: jobs.salaryMax,
+      description: jobs.description,
+      requirements: jobs.requirements,
+      applicationDeadline: jobs.applicationDeadline,
+      applicationPlatform: jobs.applicationPlatform,
+      externalApplyLink: jobs.externalApplyLink,
+      contactEmail: jobs.contactEmail,
+      status: jobs.status,
+      postedAt: jobs.postedAt,
+      createdAt: jobs.createdAt,
+      updatedAt: jobs.updatedAt,
+      employerId: jobs.employerId,
+      companyName: employerProfiles.companyName,
+      companyImage: employerProfiles.profileImage,
+      companyIndustry: employerProfiles.industry,
+      companySize: employerProfiles.companySize,
+      companyAddress: employerProfiles.currentAddress,
+      companyWebsite: employerProfiles.websiteLink,
+      companyDescription: employerProfiles.companyDescription,
+    })
+    .from(jobs)
+    .leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
+    .where(eq(jobs.id, jobId))
+    .limit(1);
+
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   return NextResponse.json(job);
 }
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const { id } = await params;
-  const auth = await requireEmployer();
-  if (auth.error) return auth.error;
-
-  const [existing] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.employerId !== auth.user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { jobId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user || user.role !== "employer") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.id, jobId), eq(jobs.employerId, user.id)))
+    .limit(1);
+
+  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
-  const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
-  }
-
-  const data: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
-  if (parsed.data.applicationDeadline) {
-    data.applicationDeadline = new Date(parsed.data.applicationDeadline);
-  }
 
   const [updated] = await db
     .update(jobs)
-    .set(data)
-    .where(eq(jobs.id, id))
+    .set({
+      ...body,
+      updatedAt: new Date(),
+      postedAt:
+        body.status === "active" && !job.postedAt ? new Date() : job.postedAt,
+    })
+    .where(eq(jobs.id, jobId))
     .returning();
 
   return NextResponse.json(updated);
@@ -74,18 +87,23 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const { id } = await params;
-  const auth = await requireEmployer();
-  if (auth.error) return auth.error;
-
-  const [existing] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.employerId !== auth.user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { jobId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user || user.role !== "employer") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await db.delete(jobs).where(eq(jobs.id, id));
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.id, jobId), eq(jobs.employerId, user.id)))
+    .limit(1);
+
+  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await db.update(jobs).set({ status: "closed", updatedAt: new Date() }).where(eq(jobs.id, jobId));
+
   return NextResponse.json({ success: true });
 }

@@ -27,7 +27,7 @@ function getRedirectByUser(user: {
     return user.role === "employer" ? "/employer" : "/job_seeker";
   }
 
-  return user.role === "employer" ? "/employer_profile" : "/profile";
+  return user.role === "employer" ? "/dashboard" : "/home_page";
 }
 
 export async function POST(req: Request) {

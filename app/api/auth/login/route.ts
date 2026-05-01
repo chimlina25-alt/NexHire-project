@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { users } from "@/app/db/schema";
+import { users, adminAccounts, adminSessions } from "@/app/db/schema";
 import { comparePassword, createOtp } from "@/lib/auth";
 import { sendOtpEmail } from "@/lib/email";
+import bcrypt from "bcryptjs";
+import { randomBytes, createHash } from "crypto";
+import { cookies } from "next/headers";
 
 const schema = z.object({
   email: z.string().email(),
@@ -20,8 +23,49 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid login data" }, { status: 400 });
     }
 
-    const email = parsed.data.email.toLowerCase();
+    const email = parsed.data.email.toLowerCase().trim();
 
+    // ── Check if admin ──────────────────────────────────────────
+    const [admin] = await db
+      .select()
+      .from(adminAccounts)
+      .where(eq(adminAccounts.email, email))
+      .limit(1);
+
+    if (admin) {
+      const validAdmin = await bcrypt.compare(parsed.data.password, admin.passwordHash);
+
+      if (!validAdmin) {
+        return NextResponse.json(
+          { error: "Invalid email or password" },
+          { status: 401 }
+        );
+      }
+
+      // No OTP for admin — create session directly
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      await db.insert(adminSessions).values({
+        adminId: admin.id,
+        tokenHash,
+        expiresAt,
+      });
+
+      const cookieStore = await cookies();
+      cookieStore.set("admin_session_token", rawToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        expires: expiresAt,
+      });
+
+      return NextResponse.json({ next: "/admin_dashboard" });
+    }
+
+    // ── Regular user login (your existing logic unchanged) ──────
     const [user] = await db
       .select()
       .from(users)
@@ -42,10 +86,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const isValid = await comparePassword(
-      parsed.data.password,
-      user.passwordHash
-    );
+    const isValid = await comparePassword(parsed.data.password, user.passwordHash);
 
     if (!isValid) {
       return NextResponse.json(
@@ -57,9 +98,7 @@ export async function POST(req: Request) {
     const code = await createOtp({
       email,
       purpose: "login",
-      data: {
-        userId: user.id,
-      },
+      data: { userId: user.id },
     });
 
     await sendOtpEmail(email, code, "Verify your NexHire login");
@@ -70,11 +109,8 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("LOGIN ERROR:", error);
-
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

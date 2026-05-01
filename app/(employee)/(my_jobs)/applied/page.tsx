@@ -1,7 +1,6 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Archive } from "lucide-react"; // Added Archive icon
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -26,6 +25,7 @@ const MyApplicationsApplied = () => {
   const pathname = usePathname();
   const [appliedJobs, setAppliedJobs] = useState<AppliedJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null); // Track which menu is open
 
   const tabs = [
     { name: "Saved", path: "/saved" },
@@ -40,12 +40,9 @@ const MyApplicationsApplied = () => {
         const res = await fetch("/api/applications", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) return;
-
+        // Backend should already filter out archived, but we double-check
         const mapped = (data || [])
-          .filter(
-            (item: any) =>
-              item.status !== "withdrawn" && item.status !== "rejected"
-          )
+          .filter((item: any) => item.status !== "archived" && item.status !== "withdrawn") 
           .map((item: any) => ({
             id: item.id,
             title: item.jobTitle,
@@ -55,7 +52,6 @@ const MyApplicationsApplied = () => {
             tags: [item.status],
             status: item.status,
           }));
-
         setAppliedJobs(mapped);
       } catch (error) {
         console.error(error);
@@ -63,9 +59,27 @@ const MyApplicationsApplied = () => {
         setLoading(false);
       }
     };
-
     fetchApplied();
   }, []);
+
+  // ✅ NEW: Handle Archive Action
+  const handleArchive = async (applicationId: string) => {
+    try {
+      const res = await fetch(`/api/applications/${applicationId}/archive`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        // Remove from UI immediately
+        setAppliedJobs((prev) => prev.filter((j) => j.id !== applicationId));
+        setMenuOpen(null);
+      } else {
+        alert("Failed to archive job");
+      }
+    } catch (error) {
+      console.error("Archive error:", error);
+      alert("Error archiving job");
+    }
+  };
 
   const statusColor: Record<string, string> = {
     pending: "bg-yellow-50 text-yellow-700",
@@ -80,34 +94,20 @@ const MyApplicationsApplied = () => {
           <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
           <span className="text-xl font-bold tracking-tight">NexHire</span>
         </div>
-
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <Link href="/home_page">
-            <button className="hover:text-gray-300 transition-colors">Home</button>
-          </Link>
-          <Link href="/saved">
-            <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">My Jobs</button>
-          </Link>
-          <Link href="/message">
-            <button className="hover:text-gray-300 transition-colors">Messages</button>
-          </Link>
-          <Link href="/notification">
-            <button className="hover:text-gray-300 transition-colors">Notification</button>
-          </Link>
-          <Link href="/setting">
-            <button className="hover:text-gray-300 transition-colors">Settings</button>
-          </Link>
+          <Link href="/home_page"><button className="hover:text-gray-300 transition-colors">Home</button></Link>
+          <Link href="/saved"><button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">My Jobs</button></Link>
+          <Link href="/message"><button className="hover:text-gray-300 transition-colors">Messages</button></Link>
+          <Link href="/notification"><button className="hover:text-gray-300 transition-colors">Notification</button></Link>
+          <Link href="/setting"><button className="hover:text-gray-300 transition-colors">Settings</button></Link>
         </nav>
-
         <Link href="/profile">
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
               <p className="text-sm font-bold">Profile</p>
             </div>
-            <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">
-              U
-            </div>
+            <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
           </div>
         </Link>
       </header>
@@ -117,38 +117,25 @@ const MyApplicationsApplied = () => {
           <h1 className="text-4xl font-extrabold text-[#1a1a1a] mb-2">My Applications</h1>
           <p className="text-gray-400 font-medium">Track and manage your job applications</p>
         </div>
-
         <div className="flex gap-10 border-b border-gray-400 mb-8">
           {tabs.map((tab) => {
             const isActive = pathname === tab.path;
             return (
               <Link key={tab.name} href={tab.path}>
-                <button
-                  className={`pb-4 px-1 flex flex-col items-start relative transition-all ${
-                    isActive ? "text-[#153a30]" : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  <span className="text-xs font-bold mb-1">
-                    {tab.name === "Applied" ? appliedJobs.length : 0}
-                  </span>
+                <button className={`pb-4 px-1 flex flex-col items-start relative transition-all ${isActive ? "text-[#153a30]" : "text-gray-400 hover:text-gray-600"}`}>
+                  <span className="text-xs font-bold mb-1">{tab.name === "Applied" ? appliedJobs.length : 0}</span>
                   <span className="text-lg font-bold">{tab.name}</span>
-                  {isActive && (
-                    <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#153a30] rounded-full" />
-                  )}
+                  {isActive && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#153a30] rounded-full" />}
                 </button>
               </Link>
             );
           })}
         </div>
-
+        
         <div className="flex gap-8 mb-8 text-sm font-bold text-gray-600">
           <span>Total: {appliedJobs.length}</span>
-          <span>
-            Accepted: {appliedJobs.filter((j) => j.status === "accepted").length}
-          </span>
-          <span>
-            Interview: {appliedJobs.filter((j) => j.status === "interview").length}
-          </span>
+          <span>Accepted: {appliedJobs.filter((j) => j.status === "accepted").length}</span>
+          <span>Interview: {appliedJobs.filter((j) => j.status === "interview").length}</span>
         </div>
 
         {loading ? (
@@ -165,21 +152,29 @@ const MyApplicationsApplied = () => {
                     <p className="text-gray-400 text-sm font-bold mb-4">{job.company}</p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span
-                      className={`px-4 py-1.5 rounded-full font-bold text-xs ${
-                        statusColor[job.status] ?? "bg-gray-100 text-gray-600"
-                      }`}
-                    >
+                    <span className={`px-4 py-1.5 rounded-full font-bold text-xs ${statusColor[job.status] ?? "bg-gray-100 text-gray-600"}`}>
                       {job.status}
                     </span>
-                    <button className="text-gray-400 hover:text-black transition-colors">
-                      <MoreVertical size={22} />
-                    </button>
+                    
+                    {/* ✅ UPDATED: Dropdown Menu with Archive */}
+                    <div className="relative">
+                      <button onClick={() => setMenuOpen(menuOpen === job.id ? null : job.id)} className="text-gray-400 hover:text-black transition-colors">
+                        <MoreVertical size={22} />
+                      </button>
+                      {menuOpen === job.id && (
+                        <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-10">
+                          <button 
+                            onClick={() => handleArchive(job.id)} 
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-[#6b7f79] hover:bg-[#f0f9f6] rounded-xl transition-colors"
+                          >
+                            <Archive size={14} /> Archive
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
                 <p className="text-gray-400 text-sm mb-6 max-w-2xl">{job.description}</p>
-
                 <div className="flex items-center gap-6">
                   <span className="text-lg font-extrabold text-[#1a1a1a]">{job.salary}</span>
                 </div>
@@ -191,5 +186,4 @@ const MyApplicationsApplied = () => {
     </div>
   );
 };
-
 export default MyApplicationsApplied;

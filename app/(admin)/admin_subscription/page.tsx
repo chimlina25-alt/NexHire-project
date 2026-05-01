@@ -1,155 +1,166 @@
 "use client";
 import Link from 'next/link';
-import React from 'react';
-import { usePathname } from 'next/navigation';
-
-interface SidebarItem {
-  name: string;
-  icon: React.ReactNode;
-  href: string;
-}
-import { 
-  LayoutDashboard, Users, Building2, FileText, 
+import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  LayoutDashboard, Users, Building2, FileText,
   CreditCard, Radio, MessageSquare, LogOut,
-  Search, ListFilter, Plus, Minus
+  Search, Plus, Minus, Star, Zap, TrendingUp, MoreVertical, Trash2
 } from 'lucide-react';
+import AdminSidebar from "@/components/ui/AdminSidebar";
 
-const ManageSubscriptions = () => {
-  const pathname = usePathname();
 
-  const sidebarItems: SidebarItem[] = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/admin_dashboard' },
-    { name: 'Manage Users', icon: <Users size={20} />, href: '/admin_users' },
-    { name: 'Employers', icon: <Building2 size={20} />, href: '/admin_employers' },
-    { name: 'Job Posts', icon: <FileText size={20} />, href: '/admin_job_posts' },
-    { name: 'Subscription', icon: <CreditCard size={20} />, href: '/admin_subscription' },
-    { name: 'Broadcast', icon: <Radio size={20} />, href: '/admin_broadcast' },
-    { name: 'Messages', icon: <MessageSquare size={20} />, href: '/message_ad' },
-  ];
 
-  const subscriptionData = [
-    { user: 'Coffee Corner', posts: '2 posts', type: 'Premium' },
-    { user: "Mike's Bakery", posts: '1 posts', type: 'Premium' },
-    { user: 'Spendly', posts: '3 posts', type: 'Standard' },
+const planStyle = (type: string) => {
+  if (type === 'premium') return 'bg-[#0d1f1a] text-[#00ffa3]';
+  if (type === 'standard') return 'bg-amber-100 text-amber-800';
+  return 'bg-gray-100 text-gray-500';
+};
+
+const planLabel = (type: string) => {
+  if (type === 'premium') return 'Premium';
+  if (type === 'standard') return 'Standard';
+  return 'Free';
+};
+
+const colorMap = ['#fff3e0', '#e8f5e9', '#e3f2fd', '#fce4ec', '#f3e5f5', '#e0f2f1'];
+
+export default function ManageSubscriptions() {
+  const [subs, setSubs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+
+  const fetchSubs = async () => {
+    setLoading(true);
+    const res = await fetch('/api/admin/subscriptions');
+    if (res.ok) setSubs(await res.json());
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchSubs(); }, []);
+
+  const adjust = async (id: string, delta: number, currentPosts: number) => {
+    const newPosts = Math.max(0, currentPosts + delta);
+    await fetch(`/api/admin/subscriptions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ posts: newPosts }),
+    });
+    setSubs(prev => prev.map(s => s.id === id ? { ...s, jobsPostedThisMonth: newPosts } : s));
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Cancel this subscription? The employer will be moved to the Free plan.')) return;
+    await fetch(`/api/admin/subscriptions/${id}`, { method: 'DELETE' });
+    fetchSubs();
+  };
+
+  const visible = subs.filter(s =>
+    (s.companyName || '').toLowerCase().includes(query.toLowerCase()) ||
+    (s.email || '').toLowerCase().includes(query.toLowerCase())
+  );
+
+  const stats = [
+    { label: 'Total Subscribers', value: subs.filter(s => s.plan !== 'free').length, Icon: Users, bg: 'bg-emerald-50', iconColor: 'text-emerald-700' },
+    { label: 'Premium Plans', value: subs.filter(s => s.plan === 'premium').length, Icon: Star, bg: 'bg-[#fff3e0]', iconColor: 'text-amber-700' },
+    { label: 'Standard Plans', value: subs.filter(s => s.plan === 'standard').length, Icon: Zap, bg: 'bg-purple-50', iconColor: 'text-purple-700' },
+    { label: 'Total Posts Used', value: subs.reduce((a, s) => a + s.jobsPostedThisMonth, 0), Icon: TrendingUp, bg: 'bg-blue-50', iconColor: 'text-blue-700' },
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] font-sans">
-      {/* SIDEBAR */}
-      <aside className="w-72 bg-[#f1fcf9] border-r border-gray-100 flex flex-col p-8 fixed h-full">
-        <div className="flex items-center gap-3 mb-12 ml-2">
-          <div className="w-10 h-10bg-[#153a30] rounded-full flex items-center justify-center">
-             <img src="/logo.png" alt="NexHire" />
+    <div className="flex min-h-screen bg-[#f4f7f5] font-sans">
+      <AdminSidebar />
+      <main className="flex-1 ml-64 p-8">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-2xl font-black text-[#0d1f1a]">Subscriptions</h1>
+            <p className="text-[#6b9e8a] text-sm font-medium mt-0.5">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} · {subs.filter(s => s.plan !== 'free').length} active plans</p>
           </div>
-          <span className="text-2xl font-black text-[#153a30] tracking-tight">NexHire</span>
         </div>
 
-        <nav className="flex-1 space-y-2">
-          {sidebarItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl font-bold transition-all ${
-                  isActive 
-                  ? 'bg-[#dcfce7] text-[#16a34a]' 
-                  : 'text-[#153a30]/70 hover:bg-white hover:shadow-sm'
-                }`}
-              >
-                {item.icon}
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto space-y-4">
-          <div className="bg-[#dcfce7] p-4 rounded-2xl flex items-center gap-3 border border-green-100">
-            <div className="w-10 h-10 bg-[#00ffa3] rounded-xl flex items-center justify-center font-black text-[#153a30]">A</div>
-            <div>
-              <p className="font-bold text-sm text-[#153a30]">Admin</p>
-              <p className="text-[10px] text-gray-500 truncate">Admin67@example.com</p>
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {stats.map(({ label, value, Icon, bg, iconColor }, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{label}</p>
+                <div className={`w-7 h-7 ${bg} rounded-lg flex items-center justify-center`}>
+                  <Icon size={14} className={iconColor} />
+                </div>
+              </div>
+              <p className="text-3xl font-black text-[#0d1f1a]">{value}</p>
             </div>
-          </div>
-          <Link href="/log_in">
-          <button className="w-full bg-[#ff4b4b] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-red-600 transition-colors shadow-lg shadow-red-200">
-            <LogOut size={20} />
-            Sign Out
-          </button>
-          </Link>
-        </div>
-      </aside>
-
-      {/* MAIN CONTENT */}
-      <main className="flex-1 ml-72 p-12">
-        <div className="mb-10">
-          <h1 className="text-4xl font-extrabold text-[#1a1a1a] mb-1">Subscriptions</h1>
-          <p className="text-gray-400 font-bold tracking-wide text-sm">Apr 28, 2026</p>
+          ))}
         </div>
 
-        {/* TABLE CONTAINER */}
-        <div className="bg-white rounded-[35px] border border-gray-100 shadow-sm p-8">
-          {/* SEARCH BAR */}
-          <div className="relative mb-10">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              className="w-full bg-[#f1fcf9] border-none rounded-full py-4 pl-16 pr-6 text-sm font-medium focus:ring-2 focus:ring-[#00ffa3]/20 transition-all"
-              placeholder="Search..."
-            />
-          </div>
+        <div className="relative mb-5">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
+          <input type="text" placeholder="Search subscribers..." value={query} onChange={e => setQuery(e.target.value)}
+            className="w-full bg-white border border-gray-100 rounded-xl py-3 pl-11 pr-5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00ffa3]/30" />
+        </div>
 
-          {/* SUBSCRIPTION TABLE */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-y-6">
-              <thead>
-                <tr className="text-left text-[10px] font-black text-[#1a1a1a] uppercase tracking-[0.1em]">
-                  <th className="px-6 pb-2">Management</th>
-                  <th className="px-6 pb-2 text-center">User</th>
-                  <th className="px-6 pb-2 text-center">Post available</th>
-                  <th className="px-6 pb-2 text-center">Subscription Type</th>
-                  <th className="px-6 pb-2 text-right">Post</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subscriptionData.map((sub, index) => (
-                  <tr key={index} className="group">
-                    <td className="px-6 py-4">
-                      <button className="p-2 text-gray-400 hover:text-[#153a30] transition-colors">
-                        <ListFilter size={20} />
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="font-extrabold text-[#1a1a1a] text-sm">{sub.user}</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-xs font-bold text-gray-600">{sub.posts}</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-[10px] font-black text-gray-400 uppercase italic">
-                        {sub.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors">
-                          <Minus size={12} strokeWidth={3} />
-                        </button>
-                        <button className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors">
-                          <Plus size={12} strokeWidth={3} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-[#f9fafb]">
+              <tr>
+                {['Company', 'Industry', 'Plan', 'Posts Used', 'Adjust Posts', 'Started', ''].map(h => (
+                  <th key={h} className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {loading ? (
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-400">Loading subscriptions...</td></tr>
+              ) : visible.map((sub, i) => (
+                <tr key={sub.id} className="hover:bg-[#f9fffe] transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-[#0d1f1a]" style={{ backgroundColor: colorMap[i % colorMap.length] }}>
+                        {(sub.companyName || sub.email || 'U')[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-[#0d1f1a]">{sub.companyName || 'Unknown'}</p>
+                        <p className="text-[10px] text-gray-400">{sub.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-medium text-gray-500">{sub.industry || 'N/A'}</td>
+                  <td className="px-6 py-4">
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${planStyle(sub.plan)}`}>{planLabel(sub.plan)}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-black text-[#0d1f1a]">{sub.jobsPostedThisMonth}</span>
+                      <span className="text-[10px] text-gray-400 font-semibold">posts</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => adjust(sub.id, -1, sub.jobsPostedThisMonth)} className="w-7 h-7 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center text-gray-500 transition-colors">
+                        <Minus size={12} strokeWidth={2.5} />
+                      </button>
+                      <span className="w-5 text-center text-sm font-black text-[#0d1f1a]">{sub.jobsPostedThisMonth}</span>
+                      <button onClick={() => adjust(sub.id, 1, sub.jobsPostedThisMonth)} className="w-7 h-7 bg-[#0d1f1a] hover:bg-[#1a3a2e] rounded-lg flex items-center justify-center text-[#00ffa3] transition-colors">
+                        <Plus size={12} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-bold text-gray-400">{new Date(sub.billingCycleStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                  <td className="px-6 py-4">
+                    {sub.plan !== 'free' && (
+                      <button onClick={() => handleDelete(sub.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!loading && visible.length === 0 && (
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-400">No subscriptions found.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </main>
     </div>
   );
-};
-
-export default ManageSubscriptions;
+}

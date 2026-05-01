@@ -5,6 +5,7 @@ import { db } from "@/app/db";
 import { employerProfiles, users } from "@/app/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { saveProfileImage } from "@/lib/save-profile-image";
+import { saveUpload } from "@/lib/save-upload";
 
 const schema = z.object({
   companyDescription: z.string().optional(),
@@ -21,13 +22,12 @@ const schema = z.object({
 export async function POST(req: Request) {
   try {
     const me = await getCurrentUser("auth");
-
-    if (!me) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const formData = await req.formData();
-    const image = formData.get("profileImage");
+    const imageFile = formData.get("profileImage");
+    const companyFile = formData.get("companyFile");
+    const removeCompanyFile = formData.get("removeCompanyFile") === "true";
 
     const parsed = schema.safeParse({
       companyDescription: String(formData.get("companyDescription") || ""),
@@ -45,43 +45,109 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid profile data" }, { status: 400 });
     }
 
-    const profileImage =
-      image instanceof File ? await saveProfileImage(image) : null;
+    // Robust file check — handles both File and Blob instances
+    let profileImageUrl: string | null = null;
+    if (
+      imageFile !== null &&
+      imageFile !== "" &&
+      typeof imageFile !== "string" &&
+      "arrayBuffer" in imageFile &&
+      (imageFile as Blob).size > 0
+    ) {
+      try {
+        // Normalize to a File with a proper name if it came in as a plain Blob
+        const blob = imageFile as Blob;
+        const mimeType = blob.type || "image/jpeg";
+        const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+        const normalizedFile =
+          imageFile instanceof File && imageFile.name && imageFile.name !== "blob"
+            ? imageFile
+            : new File([blob], `profile.${ext}`, { type: mimeType });
 
-    await db.insert(employerProfiles).values({
-  userId: me.id,
-  profileImage,
-  companyDescription: parsed.data.companyDescription,
-  companyName: parsed.data.companyName,
-  industry: parsed.data.industry,
-  companySize: parsed.data.companySize,
-  currentAddress: parsed.data.currentAddress,
-  foundedYear: parsed.data.foundedYear,
-  country: parsed.data.country,
-  contact: parsed.data.contact,
-  websiteLink: parsed.data.websiteLink,
-});
+        profileImageUrl = await saveProfileImage(normalizedFile);
+      } catch (e) {
+        console.error("Profile image save error:", e);
+      }
+    }
 
-    await db
-      .update(users)
-      .set({
-        onboardingCompleted: true,
+    let companyFileUrl: string | null = null;
+    let companyFileName: string | null = null;
+    if (
+      companyFile !== null &&
+      companyFile !== "" &&
+      typeof companyFile !== "string" &&
+      "arrayBuffer" in companyFile &&
+      (companyFile as Blob).size > 0
+    ) {
+      try {
+        const blob = companyFile as Blob;
+        const name = companyFile instanceof File ? companyFile.name : "document.pdf";
+        const normalizedFile = companyFile instanceof File ? companyFile : new File([blob], name, { type: blob.type });
+        companyFileUrl = await saveUpload(normalizedFile, "company-files");
+        companyFileName = normalizedFile.name;
+      } catch (e) {
+        console.error("Company file save error:", e);
+      }
+    }
+
+    const [existing] = await db
+      .select()
+      .from(employerProfiles)
+      .where(eq(employerProfiles.userId, me.id))
+      .limit(1);
+
+    if (existing) {
+      const updateData: any = {
+        ...parsed.data,
         updatedAt: new Date(),
-      })
+      };
+
+      if (profileImageUrl) updateData.profileImage = profileImageUrl;
+
+      if (companyFileUrl) {
+        updateData.companyFileUrl = companyFileUrl;
+        updateData.companyFileName = companyFileName;
+      }
+      if (removeCompanyFile) {
+        updateData.companyFileUrl = null;
+        updateData.companyFileName = null;
+      }
+
+      await db.update(employerProfiles).set(updateData).where(eq(employerProfiles.userId, me.id));
+
+      const [updated] = await db
+        .select()
+        .from(employerProfiles)
+        .where(eq(employerProfiles.userId, me.id))
+        .limit(1);
+
+      return NextResponse.json({
+        success: true,
+        profileImageUrl: updated.profileImage,
+        companyFileUrl: updated.companyFileUrl,
+        companyFileName: updated.companyFileName,
+      });
+    }
+
+    const insertData: any = {
+      userId: me.id,
+      ...parsed.data,
+    };
+    if (profileImageUrl) insertData.profileImage = profileImageUrl;
+    if (companyFileUrl) {
+      insertData.companyFileUrl = companyFileUrl;
+      insertData.companyFileName = companyFileName;
+    }
+
+    await db.insert(employerProfiles).values(insertData);
+
+    await db.update(users)
+      .set({ onboardingCompleted: true, updatedAt: new Date() })
       .where(eq(users.id, me.id));
 
-    return NextResponse.json({
-      success: true,
-      next: "/dashboard",
-    });
+    return NextResponse.json({ success: true, next: "/dashboard" });
   } catch (error) {
     console.error("EMPLOYER PROFILE ERROR:", error);
-
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

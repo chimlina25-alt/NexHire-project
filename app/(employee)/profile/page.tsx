@@ -17,6 +17,7 @@ import {
   Upload,
 } from "lucide-react";
 import ImageCropModal from "@/components/ui/ImageCropModal";
+import UserNavProfile from "@/components/ui/UserNavProfile";
 
 type JobSeekerForm = {
   description: string;
@@ -42,6 +43,7 @@ export default function JobSeekerProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [profileImage, setProfileImage] = React.useState<File | null>(null);
   const [sourceImageUrl, setSourceImageUrl] = React.useState<string | null>(null);
@@ -49,6 +51,7 @@ export default function JobSeekerProfile() {
   const [cropOpen, setCropOpen] = React.useState(false);
 
   const [cvFile, setCvFile] = React.useState<File | null>(null);
+  const [cvRemoved, setCvRemoved] = React.useState(false);
 
   const emptyForm: JobSeekerForm = {
     description: "",
@@ -72,13 +75,11 @@ export default function JobSeekerProfile() {
       try {
         const res = await fetch("/api/auth/job-seeker-profile", { cache: "no-store" });
         const data = await res.json();
-
         if (!res.ok || !data) {
           setSaved(emptyForm);
           setDraft(emptyForm);
           return;
         }
-
         const mapped: JobSeekerForm = {
           description: data.description || "",
           firstName: data.firstName || "",
@@ -92,26 +93,22 @@ export default function JobSeekerProfile() {
           cvUrl: data.cvUrl || "",
           profileImageUrl: data.profileImage || "",
         };
-
         setSaved(mapped);
         setDraft(mapped);
-      } catch (error) {
-        console.error("LOAD JOB SEEKER PROFILE ERROR:", error);
+      } catch (err) {
+        console.error("LOAD JOB SEEKER PROFILE ERROR:", err);
+        setError("Failed to load profile");
       } finally {
         setPageLoading(false);
       }
     };
-
     loadProfile();
   }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
-    setDraft((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+    setDraft((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const openFilePicker = () => fileInputRef.current?.click();
@@ -128,43 +125,35 @@ export default function JobSeekerProfile() {
   const handleDeleteImage = () => {
     if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-
     setSourceImageUrl(null);
     setCroppedPreviewUrl(null);
     setProfileImage(null);
     setCropOpen(false);
-
     setSaved((prev) => ({ ...prev, profileImageUrl: "" }));
     setDraft((prev) => ({ ...prev, profileImageUrl: "" }));
-
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
-
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       alert("Only JPG, PNG, and WEBP images are allowed");
       e.target.value = "";
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       alert("Image must be 5MB or smaller");
       e.target.value = "";
       return;
     }
-
     if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-
     const objectUrl = URL.createObjectURL(file);
     setSourceImageUrl(objectUrl);
     setCroppedPreviewUrl(null);
     setProfileImage(null);
     setCropOpen(true);
-
     e.target.value = "";
   };
 
@@ -180,47 +169,32 @@ export default function JobSeekerProfile() {
   const handleCvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
-
     const allowedTypes = [
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
-
     if (!allowedTypes.includes(file.type)) {
       alert("Only PDF, DOC, and DOCX files are allowed");
       e.target.value = "";
       return;
     }
-
     if (file.size > 10 * 1024 * 1024) {
       alert("CV must be 10MB or smaller");
       e.target.value = "";
       return;
     }
-
     setCvFile(file);
-    setDraft((prev) => ({
-      ...prev,
-      cvFileName: file.name,
-    }));
-
+    setCvRemoved(false);
+    setDraft((prev) => ({ ...prev, cvFileName: file.name }));
     e.target.value = "";
   };
 
   const handleRemoveCv = () => {
     setCvFile(null);
-    setDraft((prev) => ({
-      ...prev,
-      cvFileName: "",
-      cvUrl: "",
-    }));
-    setSaved((prev) => ({
-      ...prev,
-      cvFileName: "",
-      cvUrl: "",
-    }));
-
+    setCvRemoved(true);
+    setDraft((prev) => ({ ...prev, cvFileName: "", cvUrl: "" }));
+    setSaved((prev) => ({ ...prev, cvFileName: "", cvUrl: "" }));
     if (cvInputRef.current) cvInputRef.current.value = "";
   };
 
@@ -233,19 +207,23 @@ export default function JobSeekerProfile() {
 
   const handleEdit = () => {
     setDraft(saved);
+    setError(null);
+    setCvRemoved(false);
     setIsEditing(true);
   };
 
   const handleCancel = () => {
     setDraft(saved);
     setCvFile(null);
+    setCvRemoved(false);
+    setError(null);
     setIsEditing(false);
   };
 
   const handleSave = async () => {
     try {
       setLoading(true);
-
+      setError(null);
       const formData = new FormData();
       formData.append("description", draft.description);
       formData.append("firstName", draft.firstName);
@@ -255,41 +233,34 @@ export default function JobSeekerProfile() {
       formData.append("educationLevel", draft.educationLevel);
       formData.append("schoolUniversity", draft.schoolUniversity);
       formData.append("year", draft.year);
-
-      if (profileImage) {
-        formData.append("profileImage", profileImage);
-      }
-
-      if (cvFile) {
-        formData.append("cvFile", cvFile);
-      }
+      if (profileImage) formData.append("profileImage", profileImage);
+      if (cvFile) formData.append("cvFile", cvFile);
+      if (cvRemoved) formData.append("removeCv", "1");
 
       const res = await fetch("/api/auth/job-seeker-profile", {
         method: "POST",
         body: formData,
       });
-
       const data = await res.json();
-
       if (!res.ok) {
-        alert(data.error || "Failed to update profile");
+        setError(data.error || "Failed to update profile");
         return;
       }
-
       const nextSaved: JobSeekerForm = {
         ...draft,
-        cvUrl: data.cvUrl || draft.cvUrl,
-        cvFileName: data.cvFileName || draft.cvFileName,
+        cvUrl: data.cvUrl ?? (cvRemoved ? "" : draft.cvUrl),
+        cvFileName: data.cvFileName ?? (cvRemoved ? "" : draft.cvFileName),
         profileImageUrl: data.profileImageUrl || draft.profileImageUrl,
       };
-
       setSaved(nextSaved);
       setDraft(nextSaved);
       setCvFile(null);
+      setCvRemoved(false);
       setIsEditing(false);
-    } catch (error) {
-      console.error("JOB SEEKER UPDATE ERROR:", error);
-      alert("Something went wrong");
+      window.dispatchEvent(new Event("profileUpdated"));
+    } catch (err) {
+      console.error("JOB SEEKER UPDATE ERROR:", err);
+      setError("Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -311,7 +282,6 @@ export default function JobSeekerProfile() {
     saved.cvFileName || saved.cvUrl,
     saved.profileImageUrl || croppedPreviewUrl || sourceImageUrl,
   ];
-
   const completion = Math.round(
     (completionFields.filter(Boolean).length / completionFields.length) * 100
   );
@@ -327,12 +297,13 @@ export default function JobSeekerProfile() {
   return (
     <>
       <div className="min-h-screen bg-[#edf4f1] pb-16 font-sans text-[#10211d]">
+
+        {/* HEADER */}
         <header className="sticky top-0 z-50 flex items-center justify-between bg-[#051612] px-8 py-4 text-white shadow-lg">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="NexHire" className="h-8 w-8" />
             <span className="text-xl font-bold tracking-tight">NexHire</span>
           </div>
-
           <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
             <Link href="/home_page"><button className="hover:text-gray-300">Home</button></Link>
             <Link href="/saved"><button className="hover:text-gray-300">My Jobs</button></Link>
@@ -340,24 +311,12 @@ export default function JobSeekerProfile() {
             <Link href="/notification"><button className="hover:text-gray-300">Notification</button></Link>
             <Link href="/setting"><button className="hover:text-gray-300">Settings</button></Link>
           </nav>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-gray-400">User name</p>
-              <p className="text-sm font-bold truncate max-w-[140px]">{fullName}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2d4f45] font-bold text-white">
-              {saved.profileImageUrl ? (
-                <img src={saved.profileImageUrl} alt={fullName} className="h-full w-full object-cover" />
-              ) : (
-                saved.firstName.charAt(0) || "U"
-              )}
-            </div>
-          </div>
+          <UserNavProfile />
         </header>
 
+        {/* HERO */}
         <section className="relative overflow-hidden bg-[#051612]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(64,181,148,0.22),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.08),_transparent_28%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(64,181,148,0.22),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_28%)]" />
           <div className="relative mx-auto max-w-7xl px-8 py-12 md:py-16">
             <div className="max-w-3xl">
               <h1 className="text-3xl font-black tracking-tight text-white md:text-5xl">
@@ -370,7 +329,16 @@ export default function JobSeekerProfile() {
           </div>
         </section>
 
+        {/* MAIN */}
         <main className="mx-auto max-w-7xl px-8 pt-8">
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Profile card */}
           <section className={`${cardClass} mb-8 p-6 md:p-8`}>
             <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col items-center gap-6 text-center lg:flex-row lg:text-left">
@@ -384,7 +352,6 @@ export default function JobSeekerProfile() {
                       </svg>
                     )}
                   </div>
-
                   <button
                     type="button"
                     onClick={handleCircleAction}
@@ -392,7 +359,6 @@ export default function JobSeekerProfile() {
                   >
                     {displayImageSrc ? <Pencil size={18} /> : <Camera size={20} />}
                   </button>
-
                   {displayImageSrc && isEditing && (
                     <button
                       type="button"
@@ -402,7 +368,6 @@ export default function JobSeekerProfile() {
                       <Trash2 size={16} />
                     </button>
                   )}
-
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -411,14 +376,12 @@ export default function JobSeekerProfile() {
                     className="hidden"
                   />
                 </div>
-
                 <div className="max-w-2xl">
                   <h2 className="text-2xl font-black text-[#0d211b] md:text-3xl">{fullName}</h2>
                   <p className="mt-2 text-sm font-bold text-[#40b594]">Open to opportunities</p>
                   <p className="mt-4 text-sm leading-7 text-[#58706a]">{saved.description || "No description yet."}</p>
                 </div>
               </div>
-
               <div className="flex flex-wrap justify-center gap-3 lg:justify-end">
                 {isEditing ? (
                   <>
@@ -435,7 +398,10 @@ export default function JobSeekerProfile() {
                       disabled={loading}
                       className="rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
                     >
-                      <span className="inline-flex items-center gap-2"><Save size={16} />{loading ? "Saving..." : "Save Changes"}</span>
+                      <span className="inline-flex items-center gap-2">
+                        <Save size={16} />
+                        {loading ? "Saving..." : "Save Changes"}
+                      </span>
                     </button>
                   </>
                 ) : (
@@ -451,8 +417,13 @@ export default function JobSeekerProfile() {
             </div>
           </section>
 
+          {/* Grid */}
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-[0.95fr_2.05fr]">
+
+            {/* ASIDE */}
             <aside className="space-y-8">
+
+              {/* Completion */}
               <section className={`${cardClass} p-6`}>
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#40b594]">
                   Profile Completion
@@ -466,6 +437,7 @@ export default function JobSeekerProfile() {
                 </div>
               </section>
 
+              {/* Quick Info */}
               <section className={`${cardClass} p-6`}>
                 <h3 className="mb-5 text-base font-extrabold text-[#071a15]">Quick Info</h3>
                 <div className="space-y-4">
@@ -475,6 +447,7 @@ export default function JobSeekerProfile() {
                 </div>
               </section>
 
+              {/* CV Storage sidebar */}
               <section className={`${cardClass} p-6`}>
                 <div className="mb-5 flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eff8f5] text-[#40b594]">
@@ -485,35 +458,37 @@ export default function JobSeekerProfile() {
                     <p className="text-xs text-[#6a817b]">Store one CV in this profile</p>
                   </div>
                 </div>
-
                 <div className="rounded-3xl border border-dashed border-[#cfe2db] bg-[#f8fcfa] p-4">
                   <p className="text-sm font-semibold text-[#17332b]">
                     {saved.cvFileName || "No CV uploaded yet"}
                   </p>
                   {saved.cvUrl ? (
-                    <a
-                      href={saved.cvUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#0a7e61]"
-                    >
-                      <FileText size={16} />
-                      View uploaded CV
-                    </a>
-                  ) : (
+  <a
+    href={saved.cvUrl}
+    target="_blank"
+    rel="noreferrer"
+    className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#0a7e61]"
+  >
+    <FileText size={16} />
+    View uploaded CV
+  </a>
+) : (
                     <p className="mt-2 text-xs text-[#7a8f89]">PDF, DOC, or DOCX</p>
                   )}
                 </div>
               </section>
+
             </aside>
 
+            {/* RIGHT COLUMN */}
             <div className="space-y-8">
+
+              {/* Personal Info */}
               <section className={`${cardClass} p-6 md:p-8`}>
                 <div className="mb-6 flex items-center justify-between">
                   <h3 className="text-xl font-black text-[#0d211b]">Personal Information</h3>
                   <User2 className="text-[#40b594]" size={22} />
                 </div>
-
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <EditableField editing={isEditing} label="First Name" name="firstName" value={profile.firstName} onChange={handleChange} />
                   <EditableField editing={isEditing} label="Last Name" name="lastName" value={profile.lastName} onChange={handleChange} />
@@ -522,12 +497,12 @@ export default function JobSeekerProfile() {
                 </div>
               </section>
 
+              {/* Education */}
               <section className={`${cardClass} p-6 md:p-8`}>
                 <div className="mb-6 flex items-center justify-between">
                   <h3 className="text-xl font-black text-[#0d211b]">Education Details</h3>
                   <Briefcase className="text-[#40b594]" size={22} />
                 </div>
-
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                   <EditableSelect
                     editing={isEditing}
@@ -542,6 +517,7 @@ export default function JobSeekerProfile() {
                 </div>
               </section>
 
+              {/* About */}
               <section className={`${cardClass} p-6 md:p-8`}>
                 <h3 className="mb-6 text-xl font-black text-[#0d211b]">About Candidate</h3>
                 {isEditing ? (
@@ -556,6 +532,7 @@ export default function JobSeekerProfile() {
                 )}
               </section>
 
+              {/* CV UPLOAD SECTION */}
               <section className={`${cardClass} p-6 md:p-8`}>
                 <div className="mb-6 flex items-center justify-between">
                   <div>
@@ -565,65 +542,121 @@ export default function JobSeekerProfile() {
                   <FileText className="text-[#40b594]" size={22} />
                 </div>
 
-                <div className="rounded-[28px] border border-dashed border-[#cfe2db] bg-[#f8fcfa] p-6">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-bold text-[#17332b]">
-                        {profile.cvFileName || saved.cvFileName || "No CV selected"}
-                      </p>
-                      <p className="mt-1 text-xs text-[#7a8f89]">
-                        Accepted formats: PDF, DOC, DOCX. Max size: 10MB.
-                      </p>
-                    </div>
+                {/* VIEW MODE */}
+                {!isEditing && (
+                  <div className="rounded-[28px] border border-[#cfe2db] bg-[#f8fcfa] p-6">
+                    {saved.cvUrl && saved.cvFileName ? (
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e6f5f0] text-[#40b594] shrink-0">
+                            <FileText size={22} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-[#0d211b] truncate max-w-[200px]">
+                              {saved.cvFileName}
+                            </p>
+                            <p className="text-xs text-[#6a817b] mt-0.5">CV on file</p>
+                          </div>
+                        </div>
+                        
+                          <a
+  href={saved.cvUrl}
+  target="_blank"
+  rel="noreferrer"
+  className="inline-flex items-center gap-2 rounded-2xl bg-[#051612] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#0d2a23] transition-all"
+>
+  <FileText size={15} />
+  View CV
+</a>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-6 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e6f5f0] text-[#40b594] mb-3">
+                          <FileText size={26} />
+                        </div>
+                        <p className="text-sm font-bold text-[#17332b]">No CV uploaded yet</p>
+                        <p className="text-xs text-[#7a8f89] mt-1">PDF, DOC, or DOCX · Max 10MB</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                    <div className="flex flex-wrap gap-3">
-                      {isEditing && (
-                        <>
+                {/* EDIT MODE */}
+                {isEditing && (
+                  <div className="space-y-4">
+                    {(profile.cvFileName || saved.cvFileName) ? (
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-[#cfe2db] bg-[#f0faf6] px-5 py-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f5f0] text-[#40b594] shrink-0">
+                            <FileText size={20} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-[#0d211b] truncate">
+                              {profile.cvFileName || saved.cvFileName}
+                            </p>
+                            <p className="text-xs text-[#6a817b] mt-0.5">
+                              {cvFile ? "Ready to upload" : "Currently on file"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {saved.cvUrl && !cvFile && (
+  <a
+    href={saved.cvUrl}
+    target="_blank"
+    rel="noreferrer"
+    className="inline-flex items-center gap-1.5 rounded-xl bg-[#eff8f5] border border-[#cfe2db] px-3 py-2 text-xs font-bold text-[#0a7e61] hover:bg-[#e6f5f0] transition-all"
+  >
+    <FileText size={13} />
+    View
+  </a>
+)}
                           <button
                             type="button"
-                            onClick={openCvPicker}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-[#051612] px-4 py-3 text-sm font-bold text-white"
+                            onClick={handleRemoveCv}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition-all"
                           >
-                            <Upload size={16} />
-                            Upload CV
+                            <Trash2 size={13} />
+                            Remove
                           </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={openCvPicker}
+                        className="w-full rounded-[28px] border-2 border-dashed border-[#cfe2db] bg-[#f8fcfa] p-8 flex flex-col items-center justify-center gap-3 hover:border-[#40b594] hover:bg-[#f0faf6] transition-all group"
+                      >
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e6f5f0] text-[#40b594] group-hover:bg-[#d1ede5] transition-all">
+                          <Upload size={24} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-bold text-[#17332b]">Click to upload your CV</p>
+                          <p className="text-xs text-[#7a8f89] mt-1">PDF, DOC, or DOCX · Max 10MB</p>
+                        </div>
+                      </button>
+                    )}
 
-                          {(profile.cvFileName || saved.cvFileName) && (
-                            <button
-                              type="button"
-                              onClick={handleRemoveCv}
-                              className="inline-flex items-center gap-2 rounded-2xl border border-[#d7e5df] bg-white px-4 py-3 text-sm font-bold text-[#b42318]"
-                            >
-                              <Trash2 size={16} />
-                              Remove CV
-                            </button>
-                          )}
-                        </>
-                      )}
-
-                      {!isEditing && saved.cvUrl && (
-                        <a
-                          href={saved.cvUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-2xl bg-[#eff8f5] px-4 py-3 text-sm font-bold text-[#0a7e61]"
-                        >
-                          <FileText size={16} />
-                          View CV
-                        </a>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={openCvPicker}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white hover:bg-[#0d2a23] transition-all"
+                    >
+                      <Upload size={16} />
+                      {(profile.cvFileName || saved.cvFileName) ? "Replace CV" : "Upload CV"}
+                    </button>
                   </div>
+                )}
 
-                  <input
-                    ref={cvInputRef}
-                    type="file"
-                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    onChange={handleCvChange}
-                    className="hidden"
-                  />
-                </div>
+                <input
+                  ref={cvInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={handleCvChange}
+                  className="hidden"
+                />
               </section>
+
             </div>
           </div>
         </main>

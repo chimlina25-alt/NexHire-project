@@ -2,43 +2,46 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/app/db";
-import { users } from "@/app/db/schema";
-import { clearResetSession, getCurrentUser, hashPassword } from "@/lib/auth";
+import { users, sessions } from "@/app/db/schema";
+import { getCurrentUser, hashPassword, clearResetSession, hashText } from "@/lib/auth";
+import { cookies } from "next/headers";
 
-const schema = z
-  .object({
-    password: z.string().min(8),
-    confirmPassword: z.string().min(8),
-  })
-  .refine((v) => v.password === v.confirmPassword, {
-    path: ["confirmPassword"],
-    message: "Passwords do not match",
-  });
+const schema = z.object({
+  password: z.string().min(8),
+  confirmPassword: z.string(),
+}).refine((v) => v.password === v.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "Passwords do not match",
+});
 
 export async function POST(req: Request) {
-  const me = await getCurrentUser("reset");
-  if (!me) {
-    return NextResponse.json({ error: "Reset session expired" }, { status: 401 });
-  }
-
   const body = await req.json();
   const parsed = schema.safeParse(body);
-
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid password data" }, { status: 400 });
+  return NextResponse.json(
+    { error: parsed.error.issues[0]?.message || "Invalid data" },
+    { status: 400 }
+  );
+}
+
+  const user = await getCurrentUser("reset");
+  if (!user) {
+    return NextResponse.json({ error: "Invalid or expired session" }, { status: 401 });
   }
 
-  const passwordHash = await hashPassword(parsed.data.password);
+  const newHash = await hashPassword(parsed.data.password);
 
-  await db
-    .update(users)
-    .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(users.id, me.id));
+  await db.update(users)
+    .set({ passwordHash: newHash, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
 
-  await clearResetSession();
+  // Delete reset session
+  const cookieStore = await cookies();
+  const rawToken = cookieStore.get("reset_token")?.value;
+  if (rawToken) {
+    await db.delete(sessions).where(eq(sessions.tokenHash, hashText(rawToken)));
+    cookieStore.delete("reset_token");
+  }
 
-  return NextResponse.json({
-    success: true,
-    next: "/reset_password_success",
-  });
+  return NextResponse.json({ success: true, next: "/password_successful" });
 }

@@ -1,7 +1,6 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
-import { Bookmark, MoreVertical, Trash2 } from "lucide-react";
+import { Bookmark, MoreVertical, Trash2, Archive } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -65,7 +64,6 @@ const MyApplications = () => {
         const res = await fetch("/api/saved-jobs", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) return;
-
         const mapped = (data || []).map((item: any) => ({
           id: item.id,
           jobId: item.jobId,
@@ -77,7 +75,6 @@ const MyApplications = () => {
             Boolean
           ) as string[],
         }));
-
         setSavedJobs(mapped);
       } catch (error) {
         console.error(error);
@@ -85,7 +82,6 @@ const MyApplications = () => {
         setLoading(false);
       }
     };
-
     fetchSaved();
   }, []);
 
@@ -95,19 +91,33 @@ const MyApplications = () => {
     setMenuOpen(null);
   };
 
+  const handleArchive = async (jobId: string, savedId: string) => {
+    try {
+      const res = await fetch(`/api/applications/${jobId}/archive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        setSavedJobs((prev) => prev.filter((j) => j.id !== savedId));
+        setMenuOpen(null);
+      }
+    } catch (error) {
+      console.error("Archive error:", error);
+    }
+  };
+
   const handleApply = async () => {
     if (!applyModalJob) return;
     try {
       setApplying(true);
       const form = new FormData();
+      form.append("jobId", applyModalJob.jobId);
       form.append("coverLetter", coverLetter);
       if (cvFile) form.append("cvFile", cvFile);
-
       const res = await fetch(`/api/jobs/${applyModalJob.jobId}/apply`, {
         method: "POST",
         body: form,
       });
-
       if (res.ok) {
         alert("Application submitted successfully!");
         setApplyModalJob(null);
@@ -132,7 +142,6 @@ const MyApplications = () => {
           <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
           <span className="text-xl font-bold tracking-tight">NexHire</span>
         </div>
-
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
           <Link href="/home_page">
             <button className="hover:text-gray-300 transition-colors">Home</button>
@@ -150,7 +159,6 @@ const MyApplications = () => {
             <button className="hover:text-gray-300 transition-colors">Settings</button>
           </Link>
         </nav>
-
         <Link href="/profile">
           <div className="flex items-center gap-4">
             <div className="text-right">
@@ -169,7 +177,6 @@ const MyApplications = () => {
           <h1 className="text-4xl font-extrabold text-[#1a1a1a] mb-2">My Applications</h1>
           <p className="text-gray-400 font-medium">Track and manage your job applications</p>
         </div>
-
         <div className="flex gap-10 border-b border-gray-400 mb-8">
           {tabs.map((tab) => {
             const isActive = pathname === tab.path;
@@ -192,7 +199,6 @@ const MyApplications = () => {
             );
           })}
         </div>
-
         {loading ? (
           <div className="text-sm text-gray-500">Loading saved jobs...</div>
         ) : savedJobs.length === 0 ? (
@@ -226,6 +232,13 @@ const MyApplications = () => {
                       {menuOpen === job.id && (
                         <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-10">
                           <button
+                            onClick={() => handleArchive(job.jobId, job.id)}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-[#6b7f79] hover:bg-[#f0f9f6] rounded-xl transition-colors"
+                          >
+                            <Archive size={14} />
+                            Archive
+                          </button>
+                          <button
                             onClick={() => handleUnsave(job.jobId, job.id)}
                             className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors"
                           >
@@ -237,9 +250,7 @@ const MyApplications = () => {
                     </div>
                   </div>
                 </div>
-
                 <p className="text-gray-400 text-sm mb-6 max-w-2xl">{job.description}</p>
-
                 <div className="flex items-center gap-6">
                   <span className="text-lg font-extrabold text-[#1a1a1a]">{job.salary}</span>
                   <div className="flex gap-2">
@@ -278,7 +289,6 @@ const MyApplications = () => {
                 x
               </button>
             </div>
-
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-extrabold text-[#071a15] mb-2">
@@ -292,7 +302,6 @@ const MyApplications = () => {
                   className="w-full rounded-xl border border-gray-200 bg-[#f8faf9] px-4 py-3 text-sm font-medium text-[#071a15] resize-none focus:outline-none focus:ring-2 focus:ring-[#40b594]/30"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-extrabold text-[#071a15] mb-2">
                   Upload CV (optional)
@@ -305,7 +314,6 @@ const MyApplications = () => {
                 />
               </div>
             </div>
-
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleApply}
@@ -331,5 +339,4 @@ const MyApplications = () => {
     </div>
   );
 };
-
 export default MyApplications;

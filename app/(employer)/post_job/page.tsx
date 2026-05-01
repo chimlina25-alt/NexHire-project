@@ -11,156 +11,80 @@ import {
   CheckCircle,
   X,
   AlertCircle,
+  MapPin,
+  DollarSign,
+  Calendar,
+  Tag,
+  Monitor,
+  Mail,
+  Link2,
+  Users,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import EmployerNavProfile from "@/components/ui/EmployerNavProfile";
 
 const categoryOptions = [
-  "IT & Software",
-  "Design",
-  "Marketing",
-  "Sales",
-  "Finance",
-  "Human Resources",
-  "Engineering",
-  "Customer Support",
-  "Operations",
-  "Legal",
+  "IT & Software", "Design", "Marketing", "Sales", "Finance",
+  "Human Resources", "Engineering", "Customer Support", "Operations", "Legal",
 ];
 
 const locationOptions = [
-  "Phnom Penh",
-  "Siem Reap",
-  "Battambang",
-  "Sihanoukville",
-  "Kampot",
-  "Kandal",
-  "Takeo",
-  "Remote",
-  "Other",
+  "Phnom Penh", "Siem Reap", "Battambang", "Sihanoukville",
+  "Kampot", "Kandal", "Takeo", "Remote", "Other",
 ];
 
 type ToastType = "success" | "error";
-
-type Toast = {
-  id: number;
-  type: ToastType;
-  message: string;
-};
+type Toast = { id: number; type: ToastType; message: string };
 
 function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
-
   const show = (message: string, type: ToastType = "success") => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
-
-  const remove = (id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
+  const remove = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
   return { toasts, show, remove };
 }
 
-function ToastContainer({
-  toasts,
-  onRemove,
-}: {
-  toasts: Toast[];
-  onRemove: (id: number) => void;
-}) {
+function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: number) => void }) {
   if (toasts.length === 0) return null;
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
       {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg border min-w-[280px] max-w-sm ${
-            toast.type === "success"
-              ? "bg-white border-green-200"
-              : "bg-white border-red-200"
-          }`}
-        >
-          {toast.type === "success" ? (
-            <CheckCircle size={18} className="text-green-500 shrink-0" />
-          ) : (
-            <AlertCircle size={18} className="text-red-500 shrink-0" />
-          )}
-          <p
-            className={`text-sm font-bold flex-1 ${
-              toast.type === "success" ? "text-green-700" : "text-red-700"
-            }`}
-          >
-            {toast.message}
-          </p>
-          <button
-            onClick={() => onRemove(toast.id)}
-            className="text-gray-400 hover:text-gray-600 shrink-0"
-          >
-            <X size={15} />
-          </button>
+        <div key={toast.id} className={`flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg border min-w-[280px] max-w-sm ${toast.type === "success" ? "bg-white border-green-200" : "bg-white border-red-200"}`}>
+          {toast.type === "success"
+            ? <CheckCircle size={18} className="text-green-500 shrink-0" />
+            : <AlertCircle size={18} className="text-red-500 shrink-0" />}
+          <p className={`text-sm font-bold flex-1 ${toast.type === "success" ? "text-green-700" : "text-red-700"}`}>{toast.message}</p>
+          <button onClick={() => onRemove(toast.id)} className="text-gray-400 hover:text-gray-600 shrink-0"><X size={15} /></button>
         </div>
       ))}
     </div>
   );
 }
 
-function Combobox({
-  placeholder,
-  options,
-  inputClass,
-  value,
-  onChange,
-}: {
-  placeholder: string;
-  options: string[];
-  inputClass: string;
-  value: string;
-  onChange: (value: string) => void;
+function Combobox({ placeholder, options, inputClass, value, onChange }: {
+  placeholder: string; options: string[]; inputClass: string; value: string; onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-
-  const filtered = options.filter((o) =>
-    o.toLowerCase().includes(value.toLowerCase())
-  );
-
+  const filtered = options.filter((o) => o.toLowerCase().includes(value.toLowerCase()));
   return (
     <div className="relative">
       <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
+        type="text" value={value} placeholder={placeholder}
         className={`${inputClass} pr-10`}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
-        }}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
       />
-      <ChevronDown
-        size={16}
-        className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#6b7f79] pointer-events-none transition-transform duration-200 ${
-          open ? "rotate-180" : ""
-        }`}
-      />
+      <ChevronDown size={16} className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#6b7f79] pointer-events-none transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       {open && filtered.length > 0 && (
         <ul className="absolute z-50 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
           {filtered.map((option) => (
-            <li
-              key={option}
-              onMouseDown={() => {
-                onChange(option);
-                setOpen(false);
-              }}
-              className={`px-4 py-2.5 text-sm font-medium text-[#071a15] cursor-pointer transition-colors hover:bg-[#f0f9f6] hover:text-[#40b594] ${
-                value === option ? "bg-[#f0f9f6] text-[#40b594] font-bold" : ""
-              }`}
-            >
+            <li key={option} onMouseDown={() => { onChange(option); setOpen(false); }}
+              className={`px-4 py-2.5 text-sm font-medium text-[#071a15] cursor-pointer transition-colors hover:bg-[#f0f9f6] hover:text-[#40b594] ${value === option ? "bg-[#f0f9f6] text-[#40b594] font-bold" : ""}`}>
               {option}
             </li>
           ))}
@@ -170,29 +94,136 @@ function Combobox({
   );
 }
 
-type DraftJob = {
-  id: string;
-  title: string;
-  category: string;
-  lastSaved: string;
+type DraftJob = { id: string; title: string; category: string; lastSaved: string };
+
+type FullDraftJob = {
+  id: string; title: string; category: string; location: string;
+  arrangement: string; employmentType: string; experienceLevel: string;
+  salaryMin: number | null; salaryMax: number | null;
+  applicationDeadline: string | null; description: string;
+  requirements: string | null; applicationPlatform: string;
+  externalApplyLink: string | null; contactEmail: string | null;
+  status: string; createdAt: string; postedAt: string | null;
 };
 
+// Converts DB snake_case values back to display labels for the form selects
+function toArrangementLabel(val: string) {
+  return val === "on_site" ? "On-site" : val === "remote" ? "Remote" : val === "hybrid" ? "Hybrid" : "";
+}
+function toEmploymentLabel(val: string) {
+  return val === "full_time" ? "Full-time" : val === "part_time" ? "Part-time" : val === "contract" ? "Contract" : val === "freelance" ? "Freelance" : val === "internship" ? "Internship" : "";
+}
+function toExperienceLabel(val: string) {
+  return val === "entry" ? "Entry Level" : val === "mid" ? "Mid Level" : val === "senior" ? "Senior" : val === "lead" ? "Lead / Manager" : val === "executive" ? "Executive" : "";
+}
+function fmtDisplay(val: string) {
+  return val.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function DraftViewModal({ draft, onClose, onEditDraft }: {
+  draft: FullDraftJob; onClose: () => void; onEditDraft: (draft: FullDraftJob) => void;
+}) {
+  const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | null | undefined }) => {
+    if (!value) return null;
+    return (
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 bg-[#f0f9f6] rounded-lg flex items-center justify-center border border-[#d1e8e3] shrink-0 mt-0.5">{icon}</div>
+        <div>
+          <p className="text-xs font-bold text-[#6b7f79] uppercase tracking-wide">{label}</p>
+          <p className="text-sm font-semibold text-[#071a15] mt-0.5">{value}</p>
+        </div>
+      </div>
+    );
+  };
+
+  const salary = draft.salaryMin || draft.salaryMax
+    ? `$${draft.salaryMin?.toLocaleString() ?? "0"} – $${draft.salaryMax?.toLocaleString() ?? "?"}`
+    : null;
+  const deadline = draft.applicationDeadline
+    ? new Date(draft.applicationDeadline).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(5,22,18,0.55)", backdropFilter: "blur(2px)" }} onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-gray-100 flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3] shrink-0">
+              <Briefcase size={22} className="text-[#40b594]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-[#40b594] bg-[#f0f9f6] px-2.5 py-0.5 rounded-lg border border-[#d1e8e3]">Draft</span>
+                <span className="text-xs font-bold text-[#6b7f79] bg-gray-100 px-2.5 py-0.5 rounded-lg">{draft.category}</span>
+              </div>
+              <h2 className="text-xl font-extrabold text-[#071a15]">{draft.title}</h2>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl text-[#6b7f79] hover:bg-gray-100 hover:text-[#071a15] transition-all shrink-0"><X size={20} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-8 py-6 space-y-7">
+          <div className="grid grid-cols-2 gap-4">
+            <InfoRow icon={<MapPin size={14} className="text-[#40b594]" />} label="Location" value={draft.location} />
+            <InfoRow icon={<Monitor size={14} className="text-[#40b594]" />} label="Arrangement" value={draft.arrangement ? fmtDisplay(draft.arrangement) : null} />
+            <InfoRow icon={<Layers size={14} className="text-[#40b594]" />} label="Employment Type" value={draft.employmentType ? fmtDisplay(draft.employmentType) : null} />
+            <InfoRow icon={<Users size={14} className="text-[#40b594]" />} label="Experience Level" value={draft.experienceLevel ? fmtDisplay(draft.experienceLevel) : null} />
+            <InfoRow icon={<DollarSign size={14} className="text-[#40b594]" />} label="Salary Range" value={salary} />
+            <InfoRow icon={<Calendar size={14} className="text-[#40b594]" />} label="Application Deadline" value={deadline} />
+            <InfoRow icon={<Tag size={14} className="text-[#40b594]" />} label="Application Platform" value={draft.applicationPlatform ? fmtDisplay(draft.applicationPlatform) : null} />
+            <InfoRow icon={<Mail size={14} className="text-[#40b594]" />} label="Contact Email" value={draft.contactEmail} />
+          </div>
+          {draft.externalApplyLink && (
+            <InfoRow icon={<Link2 size={14} className="text-[#40b594]" />} label="External Apply Link" value={draft.externalApplyLink} />
+          )}
+          {draft.description && (
+            <div>
+              <p className="text-sm font-extrabold text-[#071a15] mb-3">Job Description</p>
+              <div className="bg-[#f8faf9] border border-gray-100 rounded-xl px-5 py-4">
+                <p className="text-sm text-[#4a5a55] font-medium leading-relaxed whitespace-pre-wrap">{draft.description}</p>
+              </div>
+            </div>
+          )}
+          {draft.requirements && (
+            <div>
+              <p className="text-sm font-extrabold text-[#071a15] mb-3">Requirements</p>
+              <div className="bg-[#f8faf9] border border-gray-100 rounded-xl px-5 py-4">
+                <p className="text-sm text-[#4a5a55] font-medium leading-relaxed whitespace-pre-wrap">{draft.requirements}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-between bg-[#f8faf9] rounded-b-2xl">
+          <p className="text-xs font-semibold text-[#6b7f79]">
+            <Clock size={12} className="inline mr-1 mb-0.5" />
+            Saved {new Date(draft.postedAt ?? draft.createdAt).toLocaleString()}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-bold text-[#6b7f79] hover:text-[#071a15] transition-all">Close</button>
+            {/* Edit Draft now calls onEditDraft to pre-fill the form */}
+            <button
+              onClick={() => onEditDraft(draft)}
+              className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all"
+            >
+              <FileEdit size={15} />
+              Edit Draft
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const emptyForm = {
-  title: "",
-  category: "",
-  location: "",
-  arrangement: "",
-  employmentType: "",
-  experienceLevel: "",
-  salaryMin: "",
-  salaryMax: "",
-  applicationDeadline: "",
-  description: "",
-  requirements: "",
-  applicationPlatform: "",
-  externalApplyLink: "",
-  contactEmail: "",
-  status: "active",
+  title: "", category: "", location: "", arrangement: "", employmentType: "",
+  experienceLevel: "", salaryMin: "", salaryMax: "", applicationDeadline: "",
+  description: "", requirements: "", applicationPlatform: "", externalApplyLink: "",
+  contactEmail: "", status: "active",
 };
 
 const PostJob = () => {
@@ -203,113 +234,83 @@ const PostJob = () => {
   const [draftData, setDraftData] = useState<DraftJob[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [viewingDraft, setViewingDraft] = useState<FullDraftJob | null>(null);
+  const [draftFetchLoading, setDraftFetchLoading] = useState(false);
+  // Track which draft is being edited so we can PATCH instead of POST
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
-  const inputClass =
-    "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all";
-
-  const selectClass =
-    "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all appearance-none";
-
+  const inputClass = "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all";
+  const selectClass = "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all appearance-none";
   const labelClass = "block text-sm font-extrabold text-[#071a15] mb-2";
 
-  const arrangementValue =
-    form.arrangement === "On-site"
-      ? "on_site"
-      : form.arrangement === "Remote"
-      ? "remote"
-      : form.arrangement === "Hybrid"
-      ? "hybrid"
-      : "on_site";
+  const arrangementValue = form.arrangement === "On-site" ? "on_site" : form.arrangement === "Remote" ? "remote" : form.arrangement === "Hybrid" ? "hybrid" : "on_site";
+  const employmentValue = form.employmentType === "Full-time" ? "full_time" : form.employmentType === "Part-time" ? "part_time" : form.employmentType === "Contract" ? "contract" : form.employmentType === "Freelance" ? "freelance" : form.employmentType === "Internship" ? "internship" : "full_time";
+  const experienceValue = form.experienceLevel === "Entry Level" ? "entry" : form.experienceLevel === "Mid Level" ? "mid" : form.experienceLevel === "Senior" ? "senior" : form.experienceLevel === "Lead / Manager" ? "lead" : form.experienceLevel === "Executive" ? "executive" : "entry";
 
-  const employmentValue =
-    form.employmentType === "Full-time"
-      ? "full_time"
-      : form.employmentType === "Part-time"
-      ? "part_time"
-      : form.employmentType === "Contract"
-      ? "contract"
-      : form.employmentType === "Freelance"
-      ? "freelance"
-      : form.employmentType === "Internship"
-      ? "internship"
-      : "full_time";
-
-  const experienceValue =
-    form.experienceLevel === "Entry Level"
-      ? "entry"
-      : form.experienceLevel === "Mid Level"
-      ? "mid"
-      : form.experienceLevel === "Senior"
-      ? "senior"
-      : form.experienceLevel === "Lead / Manager"
-      ? "lead"
-      : form.experienceLevel === "Executive"
-      ? "executive"
-      : "entry";
+  // Pre-fill form from a draft and switch to Post tab
+  const handleEditDraft = (draft: FullDraftJob) => {
+    setForm({
+      title: draft.title ?? "",
+      category: draft.category ?? "",
+      location: draft.location ?? "",
+      arrangement: toArrangementLabel(draft.arrangement ?? ""),
+      employmentType: toEmploymentLabel(draft.employmentType ?? ""),
+      experienceLevel: toExperienceLabel(draft.experienceLevel ?? ""),
+      salaryMin: draft.salaryMin != null ? String(draft.salaryMin) : "",
+      salaryMax: draft.salaryMax != null ? String(draft.salaryMax) : "",
+      applicationDeadline: draft.applicationDeadline
+        ? new Date(draft.applicationDeadline).toISOString().split("T")[0]
+        : "",
+      description: draft.description ?? "",
+      requirements: draft.requirements ?? "",
+      applicationPlatform: draft.applicationPlatform ?? "",
+      externalApplyLink: draft.externalApplyLink ?? "",
+      contactEmail: draft.contactEmail ?? "",
+      status: "active",
+    });
+    setEditingDraftId(draft.id);
+    setViewingDraft(null);
+    setActiveTab("post");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleSubmit = async (status: "active" | "draft") => {
-    if (!form.title.trim()) {
-      show("Job title is required.", "error");
-      return;
-    }
-    if (!form.category.trim()) {
-      show("Job category is required.", "error");
-      return;
-    }
-    if (!form.location.trim()) {
-      show("Location is required.", "error");
-      return;
-    }
-    if (!form.description.trim()) {
-      show("Job description is required.", "error");
-      return;
-    }
+    if (!form.title.trim()) { show("Job title is required.", "error"); return; }
+    if (!form.category.trim()) { show("Job category is required.", "error"); return; }
+    if (!form.location.trim()) { show("Location is required.", "error"); return; }
+    if (!form.description.trim()) { show("Job description is required.", "error"); return; }
 
     try {
       setLoading(true);
 
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title,
-          category: form.category,
-          location: form.location,
-          arrangement: arrangementValue,
-          employmentType: employmentValue,
-          experienceLevel: experienceValue,
-          salaryMin: form.salaryMin ? Number(form.salaryMin) : null,
-          salaryMax: form.salaryMax ? Number(form.salaryMax) : null,
-          applicationDeadline: form.applicationDeadline || null,
-          description: form.description,
-          requirements: form.requirements,
-          applicationPlatform: form.applicationPlatform || "internal",
-          externalApplyLink: form.externalApplyLink || null,
-          contactEmail: form.contactEmail || null,
-          status,
-        }),
-      });
+      const payload = {
+        title: form.title, category: form.category, location: form.location,
+        arrangement: arrangementValue, employmentType: employmentValue,
+        experienceLevel: experienceValue,
+        salaryMin: form.salaryMin ? Number(form.salaryMin) : null,
+        salaryMax: form.salaryMax ? Number(form.salaryMax) : null,
+        applicationDeadline: form.applicationDeadline || null,
+        description: form.description, requirements: form.requirements,
+        applicationPlatform: form.applicationPlatform || "internal",
+        externalApplyLink: form.externalApplyLink || null,
+        contactEmail: form.contactEmail || null,
+        status,
+      };
+
+      // If editing an existing draft, PATCH it; otherwise POST new
+      const res = editingDraftId
+        ? await fetch(`/api/jobs/${editingDraftId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+        : await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 
       const data = await res.json();
+      if (!res.ok) { show(data.error ?? "Failed to save job. Please try again.", "error"); return; }
 
-      if (!res.ok) {
-        show(data.error ?? "Failed to save job. Please try again.", "error");
-        return;
-      }
-
-      show(
-        status === "active"
-          ? "Job published successfully!"
-          : "Draft saved successfully!",
-        "success"
-      );
-
+      show(status === "active" ? "Job published successfully!" : "Draft saved successfully!", "success");
       setForm(emptyForm);
+      setEditingDraftId(null);
+      await loadDrafts();
 
-      if (status === "draft") {
-        await loadDrafts();
-        setActiveTab("drafts");
-      }
+      if (status === "draft") setActiveTab("drafts");
     } catch {
       show("Something went wrong. Please try again.", "error");
     } finally {
@@ -323,21 +324,31 @@ const PostJob = () => {
       const res = await fetch("/api/jobs?mine=1", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) return;
-
       const drafts = (data || [])
         .filter((job: { status: string }) => job.status === "draft")
         .map((job: { id: string; title: string; category: string; postedAt: string; createdAt: string }) => ({
-          id: job.id,
-          title: job.title,
-          category: job.category,
+          id: job.id, title: job.title, category: job.category,
           lastSaved: new Date(job.postedAt ?? job.createdAt).toLocaleString(),
         }));
-
       setDraftData(drafts);
     } catch (err) {
       console.error(err);
     } finally {
       setDraftLoading(false);
+    }
+  };
+
+  const handleViewDraft = async (jobId: string) => {
+    try {
+      setDraftFetchLoading(true);
+      const res = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setViewingDraft(data);
+      else show("Failed to load draft.", "error");
+    } catch {
+      show("Something went wrong.", "error");
+    } finally {
+      setDraftFetchLoading(false);
     }
   };
 
@@ -347,6 +358,8 @@ const PostJob = () => {
       const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
       if (res.ok) {
         setDraftData((prev) => prev.filter((d) => d.id !== jobId));
+        // If currently editing this draft, clear the form
+        if (editingDraftId === jobId) { setForm(emptyForm); setEditingDraftId(null); }
         show("Draft deleted.", "success");
       } else {
         show("Failed to delete draft.", "error");
@@ -358,37 +371,44 @@ const PostJob = () => {
     }
   };
 
+  // Load drafts on mount so the count is correct from the start
+  React.useEffect(() => {
+    loadDrafts();
+  }, []);
+
   React.useEffect(() => {
     if (activeTab === "drafts") loadDrafts();
   }, [activeTab]);
 
   return (
     <div className="min-h-screen font-sans pb-16" style={{ background: "#f0f4f3" }}>
-
       <ToastContainer toasts={toasts} onRemove={remove} />
 
-      <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-lg">
+      {viewingDraft && (
+        <DraftViewModal draft={viewingDraft} onClose={() => setViewingDraft(null)} onEditDraft={handleEditDraft} />
+      )}
+
+      {draftFetchLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(5,22,18,0.4)" }}>
+          <div className="bg-white rounded-2xl px-8 py-6 flex items-center gap-4 shadow-xl">
+            <div className="w-5 h-5 border-2 border-[#40b594] border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-bold text-[#071a15]">Loading draft...</span>
+          </div>
+        </div>
+      )}
+
+      <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between sticky top-0 z-40 shadow-lg">
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
           <span className="text-xl font-extrabold tracking-tight">NexHire</span>
         </div>
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold">
-          <Link href="/dashboard">
-            <button className="text-gray-300 hover:text-white transition-colors">Dashboard</button>
-          </Link>
+          <Link href="/dashboard"><button className="text-gray-300 hover:text-white transition-colors">Dashboard</button></Link>
           <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Post Job</button>
-          <Link href="/employer_message">
-            <button className="text-gray-300 hover:text-white transition-colors">Messages</button>
-          </Link>
-          <Link href="/employer_notification">
-            <button className="text-gray-300 hover:text-white transition-colors">Notification</button>
-          </Link>
-          <Link href="/subscription">
-            <button className="text-gray-300 hover:text-white transition-colors">Subscription</button>
-          </Link>
-          <Link href="/employer_setting">
-            <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
-          </Link>
+          <Link href="/employer_message"><button className="text-gray-300 hover:text-white transition-colors">Messages</button></Link>
+          <Link href="/employer_notification"><button className="text-gray-300 hover:text-white transition-colors">Notification</button></Link>
+          <Link href="/subscription"><button className="text-gray-300 hover:text-white transition-colors">Subscription</button></Link>
+          <Link href="/employer_setting"><button className="text-gray-300 hover:text-white transition-colors">Settings</button></Link>
         </nav>
         <EmployerNavProfile />
       </header>
@@ -397,22 +417,13 @@ const PostJob = () => {
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-widest text-[#40b594] mb-1">Hiring</p>
           <h1 className="text-4xl font-extrabold text-[#071a15]">Post a Job</h1>
-          <p className="text-[#4a5a55] font-medium mt-1">
-            Fill in the details below to publish a new role
-          </p>
+          <p className="text-[#4a5a55] font-medium mt-1">Fill in the details below to publish a new role</p>
         </div>
 
         <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1.5 mb-8 shadow-sm w-fit">
           {(["post", "drafts"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all ${
-                activeTab === tab
-                  ? "bg-[#051612] text-white shadow-sm"
-                  : "text-[#4a5a55] hover:text-[#071a15]"
-              }`}
-            >
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all ${activeTab === tab ? "bg-[#051612] text-white shadow-sm" : "text-[#4a5a55] hover:text-[#071a15]"}`}>
               {tab === "post" ? "Post Job" : `Drafts (${draftData.length})`}
             </button>
           ))}
@@ -421,6 +432,25 @@ const PostJob = () => {
         {activeTab === "post" && (
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="lg:w-2/3 space-y-6">
+              {/* Editing banner */}
+              {editingDraftId && (
+                <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center border border-amber-200">
+                      <FileEdit size={15} className="text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-amber-800">Editing a saved draft</p>
+                      <p className="text-xs font-semibold text-amber-600 mt-0.5">Changes will update the existing draft when saved, or publish it directly.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setForm(emptyForm); setEditingDraftId(null); }}
+                    className="text-xs font-bold text-amber-600 hover:text-amber-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-100">
+                    Cancel Edit
+                  </button>
+                </div>
+              )}
+
               <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-3 mb-7">
                   <div className="w-8 h-8 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3]">
@@ -428,275 +458,125 @@ const PostJob = () => {
                   </div>
                   <h2 className="text-lg font-extrabold text-[#071a15]">Job Details</h2>
                 </div>
-
                 <div className="space-y-6">
                   <div>
-                    <label className={labelClass}>
-                      Job Title <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.title}
-                      onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                      placeholder="e.g. Senior Frontend Developer"
-                      className={inputClass}
-                    />
+                    <label className={labelClass}>Job Title <span className="text-red-500">*</span></label>
+                    <input type="text" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Senior Frontend Developer" className={inputClass} />
                   </div>
-
                   <div>
-                    <label className={labelClass}>
-                      Job Category <span className="text-red-500">*</span>
-                    </label>
-                    <Combobox
-                      placeholder="e.g. Design, Marketing, IT & Software"
-                      options={categoryOptions}
-                      inputClass={inputClass}
-                      value={form.category}
-                      onChange={(value) => setForm((p) => ({ ...p, category: value }))}
-                    />
+                    <label className={labelClass}>Job Category <span className="text-red-500">*</span></label>
+                    <Combobox placeholder="e.g. Design, Marketing, IT & Software" options={categoryOptions} inputClass={inputClass} value={form.category} onChange={(value) => setForm((p) => ({ ...p, category: value }))} />
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className={labelClass}>
-                        Location <span className="text-red-500">*</span>
-                      </label>
-                      <Combobox
-                        placeholder="e.g. Phnom Penh, Remote"
-                        options={locationOptions}
-                        inputClass={inputClass}
-                        value={form.location}
-                        onChange={(value) => setForm((p) => ({ ...p, location: value }))}
-                      />
+                      <label className={labelClass}>Location <span className="text-red-500">*</span></label>
+                      <Combobox placeholder="e.g. Phnom Penh, Remote" options={locationOptions} inputClass={inputClass} value={form.location} onChange={(value) => setForm((p) => ({ ...p, location: value }))} />
                     </div>
-
                     <div className="relative">
                       <label className={labelClass}>Work Arrangement</label>
-                      <select
-                        value={form.arrangement}
-                        onChange={(e) => setForm((p) => ({ ...p, arrangement: e.target.value }))}
-                        className={selectClass}
-                      >
+                      <select value={form.arrangement} onChange={(e) => setForm((p) => ({ ...p, arrangement: e.target.value }))} className={selectClass}>
                         <option value="">On-site / Remote / Hybrid</option>
-                        <option>On-site</option>
-                        <option>Remote</option>
-                        <option>Hybrid</option>
+                        <option>On-site</option><option>Remote</option><option>Hybrid</option>
                       </select>
                       <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
                     </div>
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="relative">
                       <label className={labelClass}>Employment Type</label>
-                      <select
-                        value={form.employmentType}
-                        onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value }))}
-                        className={selectClass}
-                      >
+                      <select value={form.employmentType} onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value }))} className={selectClass}>
                         <option value="">Select type</option>
-                        <option>Full-time</option>
-                        <option>Part-time</option>
-                        <option>Contract</option>
-                        <option>Freelance</option>
-                        <option>Internship</option>
+                        <option>Full-time</option><option>Part-time</option><option>Contract</option><option>Freelance</option><option>Internship</option>
                       </select>
                       <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
                     </div>
-
                     <div className="relative">
                       <label className={labelClass}>Experience Level</label>
-                      <select
-                        value={form.experienceLevel}
-                        onChange={(e) => setForm((p) => ({ ...p, experienceLevel: e.target.value }))}
-                        className={selectClass}
-                      >
+                      <select value={form.experienceLevel} onChange={(e) => setForm((p) => ({ ...p, experienceLevel: e.target.value }))} className={selectClass}>
                         <option value="">Select level</option>
-                        <option>Entry Level</option>
-                        <option>Mid Level</option>
-                        <option>Senior</option>
-                        <option>Lead / Manager</option>
-                        <option>Executive</option>
+                        <option>Entry Level</option><option>Mid Level</option><option>Senior</option><option>Lead / Manager</option><option>Executive</option>
                       </select>
                       <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
                     </div>
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>Salary Minimum</label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79] font-bold text-sm">$</span>
-                        <input
-                          type="number"
-                          value={form.salaryMin}
-                          onChange={(e) => setForm((p) => ({ ...p, salaryMin: e.target.value }))}
-                          placeholder="0"
-                          className={`${inputClass} pl-8`}
-                        />
+                        <input type="number" value={form.salaryMin} onChange={(e) => setForm((p) => ({ ...p, salaryMin: e.target.value }))} placeholder="0" className={`${inputClass} pl-8`} />
                       </div>
                     </div>
                     <div>
                       <label className={labelClass}>Salary Maximum</label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79] font-bold text-sm">$</span>
-                        <input
-                          type="number"
-                          value={form.salaryMax}
-                          onChange={(e) => setForm((p) => ({ ...p, salaryMax: e.target.value }))}
-                          placeholder="0"
-                          className={`${inputClass} pl-8`}
-                        />
+                        <input type="number" value={form.salaryMax} onChange={(e) => setForm((p) => ({ ...p, salaryMax: e.target.value }))} placeholder="0" className={`${inputClass} pl-8`} />
                       </div>
                     </div>
                   </div>
-
                   <div>
                     <label className={labelClass}>Application Deadline</label>
-                    <input
-                      type="date"
-                      value={form.applicationDeadline}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, applicationDeadline: e.target.value }))
-                      }
-                      className={inputClass}
-                    />
+                    <input type="date" value={form.applicationDeadline} onChange={(e) => setForm((p) => ({ ...p, applicationDeadline: e.target.value }))} className={inputClass} />
                   </div>
                 </div>
               </section>
 
               <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <h2 className="text-lg font-extrabold text-[#071a15] mb-2">
-                  Job Description <span className="text-red-500">*</span>
-                </h2>
-                <p className="text-xs text-[#6b7f79] font-semibold mb-5">
-                  Describe the role, responsibilities, and what success looks like
-                </p>
-                <textarea
-                  rows={10}
-                  value={form.description}
-                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  placeholder="Write the job description here..."
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none"
-                />
+                <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Job Description <span className="text-red-500">*</span></h2>
+                <p className="text-xs text-[#6b7f79] font-semibold mb-5">Describe the role, responsibilities, and what success looks like</p>
+                <textarea rows={10} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Write the job description here..." className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none" />
               </section>
             </div>
 
             <div className="lg:w-1/3 space-y-6">
               <section className="bg-white p-7 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Requirements</h2>
-                <p className="text-xs text-[#6b7f79] font-semibold mb-5">
-                  Skills, qualifications, and must-haves
-                </p>
-                <textarea
-                  rows={8}
-                  value={form.requirements}
-                  onChange={(e) => setForm((p) => ({ ...p, requirements: e.target.value }))}
-                  placeholder="e.g. 3+ years React experience"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none"
-                />
+                <p className="text-xs text-[#6b7f79] font-semibold mb-5">Skills, qualifications, and must-haves</p>
+                <textarea rows={8} value={form.requirements} onChange={(e) => setForm((p) => ({ ...p, requirements: e.target.value }))} placeholder="e.g. 3+ years React experience" className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none" />
               </section>
 
               <section className="bg-white p-7 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-lg font-extrabold text-[#071a15] mb-6">Application Settings</h2>
-
                 <div className="space-y-5">
                   <div className="relative">
                     <label className={labelClass}>Application Platform</label>
-                    <select
-                      value={form.applicationPlatform}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, applicationPlatform: e.target.value }))
-                      }
-                      className={selectClass}
-                    >
+                    <select value={form.applicationPlatform} onChange={(e) => setForm((p) => ({ ...p, applicationPlatform: e.target.value }))} className={selectClass}>
                       <option value="">Select platform</option>
                       <option value="internal">Apply on NexHire</option>
                       <option value="external">External Link</option>
                     </select>
                     <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
                   </div>
-
                   <div>
                     <label className={labelClass}>External Link</label>
-                    <input
-                      type="text"
-                      value={form.externalApplyLink}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, externalApplyLink: e.target.value }))
-                      }
-                      placeholder="https://yoursite.com/apply"
-                      className={inputClass}
-                    />
+                    <input type="text" value={form.externalApplyLink} onChange={(e) => setForm((p) => ({ ...p, externalApplyLink: e.target.value }))} placeholder="https://yoursite.com/apply" className={inputClass} />
                   </div>
-
                   <div>
                     <label className={labelClass}>Contact Email</label>
-                    <input
-                      type="email"
-                      value={form.contactEmail}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, contactEmail: e.target.value }))
-                      }
-                      placeholder="careers@company.com"
-                      className={inputClass}
-                    />
+                    <input type="email" value={form.contactEmail} onChange={(e) => setForm((p) => ({ ...p, contactEmail: e.target.value }))} placeholder="careers@company.com" className={inputClass} />
                   </div>
-
                   <div className="pt-2">
-                    <label className="block text-sm font-extrabold text-[#071a15] mb-3">
-                      Visibility
-                    </label>
+                    <label className="block text-sm font-extrabold text-[#071a15] mb-3">Visibility</label>
                     <div className="grid grid-cols-2 gap-3">
                       {["Public Now", "Save as Draft"].map((opt) => (
-                        <label
-                          key={opt}
-                          className="flex items-center gap-2.5 bg-[#f8faf9] border border-gray-200 rounded-xl px-4 py-3 cursor-pointer hover:border-[#40b594] transition-all"
-                        >
-                          <input
-                            type="radio"
-                            name="status"
-                            checked={
-                              opt === "Public Now"
-                                ? form.status === "active"
-                                : form.status === "draft"
-                            }
-                            onChange={() =>
-                              setForm((p) => ({
-                                ...p,
-                                status: opt === "Public Now" ? "active" : "draft",
-                              }))
-                            }
-                            className="accent-[#40b594] w-4 h-4"
-                          />
+                        <label key={opt} className="flex items-center gap-2.5 bg-[#f8faf9] border border-gray-200 rounded-xl px-4 py-3 cursor-pointer hover:border-[#40b594] transition-all">
+                          <input type="radio" name="status" checked={opt === "Public Now" ? form.status === "active" : form.status === "draft"} onChange={() => setForm((p) => ({ ...p, status: opt === "Public Now" ? "active" : "draft" }))} className="accent-[#40b594] w-4 h-4" />
                           <span className="text-sm font-bold text-[#071a15]">{opt}</span>
                         </label>
                       ))}
                     </div>
                   </div>
                 </div>
-
                 <div className="border-t border-gray-100 my-6" />
-
                 <div className="space-y-3">
-                  <button
-                    onClick={() => handleSubmit("active")}
-                    disabled={loading}
-                    className="w-full bg-[#051612] text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-[#0d2a23] transition-all shadow-sm disabled:opacity-60"
-                  >
+                  <button onClick={() => handleSubmit("active")} disabled={loading} className="w-full bg-[#051612] text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-[#0d2a23] transition-all shadow-sm disabled:opacity-60">
                     {loading ? "Publishing..." : "Publish Job"}
                   </button>
-                  <button
-                    onClick={() => handleSubmit("draft")}
-                    disabled={loading}
-                    className="w-full bg-[#f0f4f3] text-[#071a15] py-3.5 rounded-xl font-extrabold text-sm border border-[#d1e8e3] hover:bg-[#d1e8e3] transition-all disabled:opacity-60"
-                  >
+                  <button onClick={() => handleSubmit("draft")} disabled={loading} className="w-full bg-[#f0f4f3] text-[#071a15] py-3.5 rounded-xl font-extrabold text-sm border border-[#d1e8e3] hover:bg-[#d1e8e3] transition-all disabled:opacity-60">
                     {loading ? "Saving..." : "Save as Draft"}
                   </button>
-                  <button
-                    onClick={() => setForm(emptyForm)}
-                    className="w-full text-[#6b7f79] py-2 rounded-xl font-bold text-sm hover:text-[#071a15] transition-all"
-                  >
+                  <button onClick={() => { setForm(emptyForm); setEditingDraftId(null); }} className="w-full text-[#6b7f79] py-2 rounded-xl font-bold text-sm hover:text-[#071a15] transition-all">
                     Clear Form
                   </button>
                 </div>
@@ -709,17 +589,12 @@ const PostJob = () => {
           <div className="max-w-3xl">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-[#6b7f79]">
-                  Saved drafts
-                </p>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#6b7f79]">Saved drafts</p>
                 <h2 className="text-xl font-extrabold text-[#071a15] mt-0.5">
                   {draftData.length} unfinished {draftData.length === 1 ? "post" : "posts"}
                 </h2>
               </div>
-              <button
-                onClick={() => setActiveTab("post")}
-                className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all shadow-sm"
-              >
+              <button onClick={() => setActiveTab("post")} className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all shadow-sm">
                 <PlusCircle size={17} />
                 New Post
               </button>
@@ -740,52 +615,36 @@ const PostJob = () => {
                   <Briefcase size={24} className="text-[#40b594]" />
                 </div>
                 <p className="font-extrabold text-[#071a15]">No drafts yet</p>
-                <p className="text-sm text-[#6b7f79] mt-1">
-                  Save a job as draft and it will appear here.
-                </p>
+                <p className="text-sm text-[#6b7f79] mt-1">Save a job as draft and it will appear here.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {draftData.map((draft) => (
-                  <div
-                    key={draft.id}
-                    className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center justify-between group hover:border-[#40b594] hover:shadow-md transition-all shadow-sm"
-                  >
+                  <div key={draft.id} className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center justify-between group hover:border-[#40b594] hover:shadow-md transition-all shadow-sm">
                     <div className="flex items-center gap-5">
                       <div className="w-12 h-12 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3] shrink-0">
                         <Briefcase size={22} className="text-[#40b594]" />
                       </div>
                       <div>
-                        <h3 className="text-base font-extrabold text-[#071a15]">
-                          {draft.title}
-                        </h3>
+                        <h3 className="text-base font-extrabold text-[#071a15]">{draft.title}</h3>
                         <div className="flex items-center gap-4 mt-1">
-                          <span className="text-xs font-bold text-[#40b594] bg-[#f0f9f6] px-2.5 py-1 rounded-lg border border-[#d1e8e3]">
-                            {draft.category}
-                          </span>
+                          <span className="text-xs font-bold text-[#40b594] bg-[#f0f9f6] px-2.5 py-1 rounded-lg border border-[#d1e8e3]">{draft.category}</span>
                           <div className="flex items-center gap-1.5 text-[#6b7f79] text-xs font-semibold">
-                            <Clock size={13} />
-                            {draft.lastSaved}
+                            <Clock size={13} />{draft.lastSaved}
                           </div>
                         </div>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDeleteDraft(draft.id)}
-                        disabled={deletingId === draft.id}
-                        className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
-                        title="Delete draft"
-                      >
+                      <button onClick={() => handleDeleteDraft(draft.id)} disabled={deletingId === draft.id}
+                        className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40" title="Delete draft">
                         <Trash2 size={18} />
                       </button>
-                      <Link href={`/jobs/${draft.id}`}>
-                        <button className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all">
-                          <FileEdit size={16} />
-                          View Draft
-                        </button>
-                      </Link>
+                      <button onClick={() => handleViewDraft(draft.id)}
+                        className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all">
+                        <FileEdit size={16} />
+                        View Draft
+                      </button>
                     </div>
                   </div>
                 ))}

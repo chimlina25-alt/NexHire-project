@@ -1,113 +1,151 @@
-// app/api/conversations/[id]/messages/route.ts
+// app/api/conversations/[conversationId]/messages/route.ts
+// FULL REPLACEMENT
+// Key fix: formData field is "attachment" (from frontend), not "file"
+
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { eq, asc, and, notInArray } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
   messages,
   conversations,
-  notifications,
   messageDeletes,
+  notifications,
+  employerProfiles,
+  jobSeekerProfiles,
 } from "@/app/db/schema";
-import { requireUser } from "@/lib/require-employer";
+import { getCurrentUser } from "@/lib/auth";
+import { saveUpload } from "@/lib/save-upload";
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
-  const { id } = await params;
-  const auth = await requireUser();
-  if (auth.error) return auth.error;
+  const { conversationId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [conv] = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.id, id))
+    .where(eq(conversations.id, conversationId))
     .limit(1);
 
   if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (conv.employerId !== auth.user.id && conv.jobSeekerId !== auth.user.id) {
+  if (conv.employerId !== user.id && conv.jobSeekerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Get messages NOT deleted by this user
-  const myDeletes = await db
-    .select({ messageId: messageDeletes.messageId })
-    .from(messageDeletes)
-    .where(eq(messageDeletes.userId, auth.user.id));
-  const deletedIds = myDeletes.map((d) => d.messageId);
-
-  const rows = await db
+  const allMessages = await db
     .select()
     .from(messages)
-    .where(
-      deletedIds.length
-        ? and(
-            eq(messages.conversationId, id),
-            notInArray(messages.id, deletedIds)
-          )
-        : eq(messages.conversationId, id)
-    )
+    .where(eq(messages.conversationId, conversationId))
     .orderBy(asc(messages.createdAt));
 
-  return NextResponse.json(rows);
-}
+  const deletedByUser = await db
+    .select()
+    .from(messageDeletes)
+    .where(eq(messageDeletes.userId, user.id));
 
-const sendSchema = z.object({
-  text: z.string().min(1).max(5000),
-});
+  const deletedIds = new Set(deletedByUser.map((d) => d.messageId));
+  const filtered = allMessages.filter((m) => !deletedIds.has(m.id));
+
+  return NextResponse.json(filtered);
+}
 
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
-  const { id } = await params;
-  const auth = await requireUser();
-  if (auth.error) return auth.error;
-
-  const body = await req.json();
-  const parsed = sendSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
-  }
+  const { conversationId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [conv] = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.id, id))
+    .where(eq(conversations.id, conversationId))
     .limit(1);
 
   if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (conv.employerId !== auth.user.id && conv.jobSeekerId !== auth.user.id) {
+  if (conv.employerId !== user.id && conv.jobSeekerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [msg] = await db
+  const contentType = req.headers.get("content-type") || "";
+  let text: string | null = null;
+  let attachmentUrl: string | null = null;
+  let attachmentName: string | null = null;
+  let attachmentType: string | null = null;
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await req.formData();
+    const rawText = String(formData.get("text") || "").trim();
+    text = rawText || null;
+
+    // Frontend sends field named "attachment"
+    const file = formData.get("attachment");
+    if (file instanceof File) {
+      attachmentUrl = await saveUpload(file, "chat-attachments");
+      attachmentName = file.name;
+      attachmentType = file.type;
+    }
+  } else {
+    const body = await req.json();
+    text = body.text || null;
+  }
+
+  if (!text && !attachmentUrl) {
+    return NextResponse.json({ error: "Message or attachment required" }, { status: 400 });
+  }
+
+  const [message] = await db
     .insert(messages)
     .values({
-      conversationId: id,
-      senderId: auth.user.id,
-      text: parsed.data.text,
+      conversationId,
+      senderId: user.id,
+      text,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
     })
     .returning();
 
+  // Update conversation lastMessageAt
   await db
     .update(conversations)
     .set({ lastMessageAt: new Date() })
-    .where(eq(conversations.id, id));
+    .where(eq(conversations.id, conversationId));
 
-  // Notify the other party
+  // Notify the other participant
   const recipientId =
-    conv.employerId === auth.user.id ? conv.jobSeekerId : conv.employerId;
+    conv.employerId === user.id ? conv.jobSeekerId : conv.employerId;
+
+  let senderName = user.email;
+  if (user.role === "employer") {
+    const [ep] = await db
+      .select()
+      .from(employerProfiles)
+      .where(eq(employerProfiles.userId, user.id))
+      .limit(1);
+    if (ep) senderName = ep.companyName;
+  } else {
+    const [sp] = await db
+      .select()
+      .from(jobSeekerProfiles)
+      .where(eq(jobSeekerProfiles.userId, user.id))
+      .limit(1);
+    if (sp) senderName = `${sp.firstName} ${sp.lastName}`;
+  }
 
   await db.insert(notifications).values({
     recipientId,
-    actorId: auth.user.id,
+    actorId: user.id,
     type: "message",
-    title: "New message",
-    description: parsed.data.text.slice(0, 100),
-    link: `/employer_message?conversation=${id}`,
+    title: `New message from ${senderName}`,
+    description: text ? text.slice(0, 100) : "Sent an attachment",
+    link: user.role === "employer" ? "/employer_message" : "/message",
+    meta: { conversationId, messageId: message.id },
   });
 
-  return NextResponse.json(msg);
+  return NextResponse.json(message, { status: 201 });
 }

@@ -1,43 +1,62 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/app/db";
-import { savedJobs } from "@/app/db/schema";
-import { requireUser } from "@/lib/current-user";
+import { savedJobs, jobs } from "@/app/db/schema";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function POST(
-  _: Request,
-  { params }: { params: { jobId: string } }
+  _req: Request,
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const auth = await requireUser("job_seeker");
-  if ("error" in auth) return auth.error;
+  const { jobId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user || user.role !== "job_seeker") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.id, jobId))
+    .limit(1);
+
+  if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+  const [existing] = await db
+    .select()
+    .from(savedJobs)
+    .where(
+      and(eq(savedJobs.jobId, jobId), eq(savedJobs.jobSeekerId, user.id))
+    )
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json({ saved: true, id: existing.id });
+  }
 
   const [saved] = await db
     .insert(savedJobs)
-    .values({
-      jobId: params.jobId,
-      jobSeekerId: auth.user.userId,
-    })
-    .onConflictDoNothing()
+    .values({ jobId, jobSeekerId: user.id })
     .returning();
 
-  return NextResponse.json(saved ?? { ok: true });
+  return NextResponse.json({ saved: true, id: saved.id }, { status: 201 });
 }
 
 export async function DELETE(
-  _: Request,
-  { params }: { params: { jobId: string } }
+  _req: Request,
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const auth = await requireUser("job_seeker");
-  if ("error" in auth) return auth.error;
+  const { jobId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user || user.role !== "job_seeker") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   await db
     .delete(savedJobs)
     .where(
-      and(
-        eq(savedJobs.jobId, params.jobId),
-        eq(savedJobs.jobSeekerId, auth.user.userId)
-      )
+      and(eq(savedJobs.jobId, jobId), eq(savedJobs.jobSeekerId, user.id))
     );
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ saved: false });
 }

@@ -1,43 +1,39 @@
 import { NextResponse } from "next/server";
-import { db } from "@/app/db";
-import { jobApplications, jobs, jobSeekerProfiles } from "@/app/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { db } from "@/app/db";
+import { jobApplications, jobSeekerProfiles, jobs, users } from "@/app/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
-  try {
-    const user = await getCurrentUser("auth");
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const applicants = await db
-      .select({
-        id:              jobApplications.id,
-        jobId:           jobApplications.jobId,
-        jobSeekerId:     jobApplications.jobSeekerId,
-        status:          jobApplications.status,
-        coverLetter:     jobApplications.coverLetter,
-        cvUrl:           jobApplications.cvUrl,
-        cvFileName:      jobApplications.cvFileName,
-        appliedAt:       jobApplications.appliedAt,
-        jobTitle:        jobs.title,
-        seekerFirstName: jobSeekerProfiles.firstName,
-        seekerLastName:  jobSeekerProfiles.lastName,
-        seekerImage:     jobSeekerProfiles.profileImage,
-      })
-      .from(jobApplications)
-      .innerJoin(jobs, eq(jobApplications.jobId, jobs.id))
-      .innerJoin(
-        jobSeekerProfiles,
-        eq(jobApplications.jobSeekerId, jobSeekerProfiles.userId)
-      )
-      .where(eq(jobApplications.employerId, user.id))
-      .orderBy(desc(jobApplications.appliedAt));
-
-    return NextResponse.json(applicants);
-  } catch (error) {
-    console.error("[GET /api/employer/applicants]", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  const user = await getCurrentUser("auth");
+  if (!user || user.role !== "employer") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const applicants = await db
+    .select({
+      id: jobApplications.id,
+      status: jobApplications.status,
+      coverLetter: jobApplications.coverLetter,
+      cvUrl: jobApplications.cvUrl,
+      cvFileName: jobApplications.cvFileName,
+      appliedAt: jobApplications.appliedAt,
+      jobId: jobApplications.jobId,
+      jobSeekerId: jobApplications.jobSeekerId,
+      jobTitle: jobs.title,
+      firstName: jobSeekerProfiles.firstName,
+      lastName: jobSeekerProfiles.lastName,
+      profileImage: jobSeekerProfiles.profileImage,
+      contact: jobSeekerProfiles.contact,
+      seekerEmail: users.email,
+    })
+    .from(jobApplications)
+    .innerJoin(jobs, eq(jobs.id, jobApplications.jobId))
+    .innerJoin(jobSeekerProfiles, eq(jobSeekerProfiles.userId, jobApplications.jobSeekerId))
+    .innerJoin(users, eq(users.id, jobApplications.jobSeekerId))
+    .where(eq(jobApplications.employerId, user.id))
+    .orderBy(desc(jobApplications.appliedAt))
+    .limit(20);
+
+  return NextResponse.json(applicants);
 }

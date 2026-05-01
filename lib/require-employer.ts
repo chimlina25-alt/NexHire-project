@@ -1,26 +1,13 @@
-// lib/require-employer.ts
-import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/app/db";
-import { employerProfiles } from "@/app/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { db } from "@/app/db";
+import { employerProfiles, subscriptions } from "@/app/db/schema";
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 
 export async function requireEmployer() {
   const user = await getCurrentUser("auth");
-
-  if (!user) {
-    return {
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  }
-
-  if (user.role !== "employer") {
-    return {
-      error: NextResponse.json(
-        { error: "Forbidden: employer access only" },
-        { status: 403 }
-      ),
-    };
+  if (!user || user.role !== "employer") {
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }), user: null, profile: null, subscription: null };
   }
 
   const [profile] = await db
@@ -29,15 +16,25 @@ export async function requireEmployer() {
     .where(eq(employerProfiles.userId, user.id))
     .limit(1);
 
-  return { user, profile: profile ?? null };
+  let [subscription] = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.employerId, user.id))
+    .limit(1);
+
+  if (!subscription) {
+    const [newSub] = await db
+      .insert(subscriptions)
+      .values({ employerId: user.id, plan: "free", jobsPostedThisMonth: 0, billingCycleStart: new Date() })
+      .returning();
+    subscription = newSub;
+  }
+
+  return { error: null, user, profile, subscription };
 }
 
-export async function requireUser() {
-  const user = await getCurrentUser("auth");
-  if (!user) {
-    return {
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  }
-  return { user };
+export function getMonthlyLimit(plan: string) {
+  if (plan === "premium") return 7;
+  if (plan === "standard") return 3;
+  return 1;
 }

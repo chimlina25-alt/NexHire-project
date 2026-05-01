@@ -1,28 +1,29 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/app/db";
 import { jobApplications } from "@/app/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(
-  _: Request,
-  { params }: { params: { jobId: string } }
+  _req: Request,
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const me = await getCurrentUser("auth");
-  if (!me || me.role !== "job_seeker") {
+  const { jobId } = await params;
+  const user = await getCurrentUser("auth");
+  if (!user || user.role !== "job_seeker") {
     return NextResponse.json({ applied: false });
   }
 
-  const [row] = await db
+  const [existing] = await db
     .select()
     .from(jobApplications)
     .where(
       and(
-        eq(jobApplications.jobId, params.jobId),
-        eq(jobApplications.jobSeekerId, me.id)
+        eq(jobApplications.jobId, jobId),
+        eq(jobApplications.jobSeekerId, user.id)
       )
     )
     .limit(1);
 
-  return NextResponse.json({ applied: !!row });
+  return NextResponse.json({ applied: !!existing, status: existing?.status ?? null });
 }

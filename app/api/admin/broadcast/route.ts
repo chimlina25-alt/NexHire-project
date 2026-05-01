@@ -1,53 +1,63 @@
 import { NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { notifications, users } from "@/app/db/schema";
-
-export async function GET() {
-  try {
-    const rows = await db
-      .select()
-      .from(notifications)
-      .orderBy(desc(notifications.createdAt))
-      .limit(100);
-
-    return NextResponse.json(rows);
-  } catch (error) {
-    console.error("ADMIN BROADCAST GET ERROR:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+import { users, notifications } from "@/app/db/schema";
+import { getCurrentAdmin } from "@/lib/admin-auth";
 
 export async function POST(req: Request) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
+    const { message, audience } = body;
 
-    if (!body.title || !body.description) {
-      return NextResponse.json(
-        { error: "Missing title or description" },
-        { status: 400 }
-      );
+    if (!message?.trim()) {
+      return NextResponse.json({ error: "Message required" }, { status: 400 });
     }
 
-    const allUsers = await db.select({ id: users.id }).from(users);
+    // Get target users
+    let targetUsers: { id: string }[] = [];
 
-    if (allUsers.length === 0) {
-      return NextResponse.json({ ok: true, sent: 0 });
+    if (audience === "All Users") {
+      targetUsers = await db.select({ id: users.id }).from(users);
+    } else if (audience === "Employers") {
+      targetUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.role, "employer"));
+    } else if (audience === "Job Seekers") {
+      targetUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.role, "job_seeker"));
     }
 
-    const inserts = allUsers.map((u) => ({
-      recipientId: u.id,
-      type: "system" as const,
-      title: body.title,
-      description: body.description,
-      link: body.link ?? "/notification",
-    }));
+    // Insert notifications in batches
+    const batchSize = 100;
+    for (let i = 0; i < targetUsers.length; i += batchSize) {
+      const batch = targetUsers.slice(i, i + batchSize);
+      const values = batch.map((u) => ({
+        recipientId: u.id,
+        type: "system" as const,
+        title: "Announcement from NexHire",
+        description: message.trim(),
+        link: null,
+        meta: { broadcast: true, audience } as Record<string, unknown>,
+      }));
+      if (values.length > 0) {
+        await db.insert(notifications).values(values);
+      }
+    }
 
-    await db.insert(notifications).values(inserts);
-
-    return NextResponse.json({ ok: true, sent: inserts.length });
+    return NextResponse.json({ success: true, sent: targetUsers.length });
   } catch (error) {
-    console.error("ADMIN BROADCAST POST ERROR:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("BROADCAST ERROR:", error);
+    return NextResponse.json(
+      { error: "Internal server error: " + String(error) },
+      { status: 500 }
+    );
   }
 }

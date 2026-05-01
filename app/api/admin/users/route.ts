@@ -1,17 +1,28 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { eq, count, desc } from "drizzle-orm";
 import { db } from "@/app/db";
-import { jobSeekerProfiles, users } from "@/app/db/schema";
+import { users, jobSeekerProfiles, jobApplications } from "@/app/db/schema";
+import { getCurrentAdmin } from "@/lib/admin-auth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const rows = await db
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const search = searchParams.get("search") || "";
+    const filter = searchParams.get("filter") || "All";
+
+    const allUsers = await db
       .select({
         id: users.id,
         email: users.email,
         role: users.role,
-        createdAt: users.createdAt,
+        isEmailVerified: users.isEmailVerified,
         onboardingCompleted: users.onboardingCompleted,
+        createdAt: users.createdAt,
         firstName: jobSeekerProfiles.firstName,
         lastName: jobSeekerProfiles.lastName,
         profileImage: jobSeekerProfiles.profileImage,
@@ -21,26 +32,54 @@ export async function GET() {
       .where(eq(users.role, "job_seeker"))
       .orderBy(desc(users.createdAt));
 
-    return NextResponse.json(rows);
-  } catch (error) {
-    console.error("ADMIN USERS GET ERROR:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: Request) {
-  try {
-    const body = await req.json();
-    const { userId } = body;
-
-    if (!userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    // Filter by search
+    let filtered = allUsers;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (u) =>
+          u.email.toLowerCase().includes(q) ||
+          `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase().includes(q)
+      );
     }
 
-    await db.delete(users).where(eq(users.id, userId));
-    return NextResponse.json({ ok: true });
+    // Filter by status
+    if (filter === "Active") {
+      filtered = filtered.filter(
+        (u) => u.isEmailVerified && u.onboardingCompleted
+      );
+    } else if (filter === "Inactive") {
+      filtered = filtered.filter(
+        (u) => !u.isEmailVerified || !u.onboardingCompleted
+      );
+    }
+
+    // Add application counts
+    const withApps = await Promise.all(
+      filtered.map(async (u) => {
+        const [appCount] = await db
+          .select({ count: count() })
+          .from(jobApplications)
+          .where(eq(jobApplications.jobSeekerId, u.id));
+
+        const status =
+          u.isEmailVerified && u.onboardingCompleted ? "Active" : "Inactive";
+
+        return {
+          ...u,
+          name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
+          status,
+          applications: Number(appCount.count),
+        };
+      })
+    );
+
+    return NextResponse.json(withApps);
   } catch (error) {
-    console.error("ADMIN USERS DELETE ERROR:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("ADMIN USERS ERROR:", error);
+    return NextResponse.json(
+      { error: "Internal server error: " + String(error) },
+      { status: 500 }
+    );
   }
 }

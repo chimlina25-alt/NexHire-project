@@ -1,224 +1,367 @@
 "use client";
-
-import Link from "next/link";
-import React, { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import React, { useState, useEffect, useRef } from "react";
 import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  FileText,
-  CreditCard,
-  Radio,
-  MessageSquare,
-  LogOut,
-  Search,
-  Trash2,
+  Search, MoreHorizontal, ChevronDown,
+  UserCheck, Shield, Trash2, ArrowUpDown,
 } from "lucide-react";
+import AdminSidebar from "@/components/ui/AdminSidebar";
 
-interface SidebarItem {
-  name: string;
-  icon: React.ReactNode;
-  href: string;
-}
-
-type UserRow = {
-  id: string;
-  email: string;
-  createdAt: string;
-  firstName: string | null;
-  lastName: string | null;
+const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
+  Active: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
+  Inactive: { bg: "bg-gray-50", text: "text-gray-500", dot: "bg-gray-400" },
+  Suspended: { bg: "bg-red-50", text: "text-red-600", dot: "bg-red-500" },
 };
 
-const ManageUsers = () => {
-  const pathname = usePathname();
-  const router = useRouter();
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  applications: number;
+  createdAt: string;
+};
 
-  const sidebarItems: SidebarItem[] = [
-    { name: "Dashboard", icon: <LayoutDashboard size={20} />, href: "/admin_dashboard" },
-    { name: "Manage Users", icon: <Users size={20} />, href: "/manage_user" },
-    { name: "Employers", icon: <Building2 size={20} />, href: "/admin_emplyer" },
-    { name: "Job Posts", icon: <FileText size={20} />, href: "/job_station" },
-    { name: "Subscription", icon: <CreditCard size={20} />, href: "/admin_subscription" },
-    { name: "Broadcast", icon: <Radio size={20} />, href: "/broadcast" },
-    { name: "Messages", icon: <MessageSquare size={20} />, href: "/admin_message" },
-  ];
+function ActionMenu({
+  user,
+  onSuspend,
+  onActivate,
+  onDelete,
+}: {
+  user: User;
+  onSuspend: () => void;
+  onActivate: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch("/api/admin/users", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          setUsers(data);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    load();
-  }, []);
-
-  const handleDelete = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
-    const res = await fetch("/api/admin/users", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-    if (res.ok) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
-    }
-  };
-
-  const handleSignOut = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  };
-
-  const filtered = users.filter((u) => {
-    const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase();
-    const email = u.email.toLowerCase();
-    const q = search.toLowerCase();
-    return name.includes(q) || email.includes(q);
-  });
+    const t = setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => { clearTimeout(t); document.removeEventListener("mousedown", handler); };
+  }, [open]);
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] font-sans">
-      <aside className="w-72 bg-[#f1fcf9] border-r border-gray-100 flex flex-col p-8 fixed h-full">
-        <div className="flex items-center gap-3 mb-12 ml-2">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center">
-            <img src="/logo.png" alt="NexHire" />
-          </div>
-          <span className="text-2xl font-black text-[#153a30] tracking-tight">NexHire</span>
-        </div>
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`p-1.5 rounded-lg transition-all ${open ? "bg-gray-100 text-[#0d1f1a]" : "hover:bg-gray-100 text-gray-400"}`}
+      >
+        <MoreHorizontal size={16} />
+      </button>
 
-        <nav className="flex-1 space-y-2">
-          {sidebarItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl font-bold transition-all ${
-                  isActive
-                    ? "bg-[#dcfce7] text-[#16a34a]"
-                    : "text-[#153a30]/70 hover:bg-white hover:shadow-sm"
-                }`}
-              >
-                {item.icon}
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto space-y-4">
-          <div className="bg-[#dcfce7] p-4 rounded-2xl flex items-center gap-3 border border-green-100">
-            <div className="w-10 h-10 bg-[#00ffa3] rounded-xl flex items-center justify-center font-black text-[#153a30]">
-              A
-            </div>
-            <div>
-              <p className="font-bold text-sm text-[#153a30]">Admin</p>
-              <p className="text-[10px] text-gray-500 truncate">admin@nexhire.com</p>
-            </div>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="px-4 py-2.5 border-b border-gray-50">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Account Actions</p>
           </div>
+
+          {user.status === "Active" || user.status === "Inactive" ? (
+            <button
+              onClick={() => { setOpen(false); onSuspend(); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Shield size={14} className="text-amber-600" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Suspend Account</p>
+                <p className="text-[10px] text-amber-500 font-medium">Disable user access</p>
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={() => { setOpen(false); onActivate(); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
+            >
+              <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <UserCheck size={14} className="text-emerald-600" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Activate Account</p>
+                <p className="text-[10px] text-emerald-500 font-medium">Restore user access</p>
+              </div>
+            </button>
+          )}
+
+          <div className="h-px bg-gray-100 mx-3" />
+
           <button
-            onClick={handleSignOut}
-            className="w-full bg-[#ff4b4b] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
+            onClick={() => { setOpen(false); onDelete(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
           >
-            <LogOut size={20} />
-            Sign Out
+            <div className="w-8 h-8 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Trash2 size={14} className="text-red-600" />
+            </div>
+            <div className="text-left">
+              <p className="font-bold text-sm">Delete Account</p>
+              <p className="text-[10px] text-red-400 font-medium">Permanently remove user</p>
+            </div>
           </button>
         </div>
-      </aside>
+      )}
+    </div>
+  );
+}
 
-      <main className="flex-1 ml-72 p-12">
-        <div className="mb-10">
-          <h1 className="text-4xl font-extrabold text-[#1a1a1a] mb-1">Manage Users</h1>
-          <p className="text-gray-400 font-bold tracking-wide uppercase text-sm">
-            {new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
+function SortDropdown({
+  sortBy,
+  onChange,
+  options,
+}: {
+  sortBy: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const t = setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => { clearTimeout(t); document.removeEventListener("mousedown", handler); };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 text-xs font-bold border rounded-xl px-4 py-2.5 transition-all bg-white ${
+          open ? "border-[#00ffa3] text-[#0d1f1a] shadow-sm" : "border-gray-200 text-gray-500 hover:border-gray-300"
+        }`}
+      >
+        <ArrowUpDown size={13} className="text-gray-400" />
+        {sortBy}
+        <ChevronDown size={13} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="px-4 py-2.5 border-b border-gray-50">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Sort by</p>
+          </div>
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                sortBy === opt ? "bg-[#f4f7f5] text-[#0d1f1a] font-black" : "text-gray-600 font-medium hover:bg-[#f9fffe] hover:text-[#0d1f1a]"
+              }`}
+            >
+              {opt}
+              {sortBy === opt && <div className="w-2 h-2 rounded-full bg-[#00ffa3]" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ManageUsers() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("Newest First");
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const sortOptions = ["Newest First", "Oldest First", "Name A–Z", "Name Z–A", "Most Applications"];
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/admin/users?search=${encodeURIComponent(search)}&filter=${filter}`
+      );
+      if (res.ok) setUsers(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchUsers(); }, [filter]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchUsers();
+  };
+
+  const handleSuspend = async (userId: string) => {
+    setPendingId(userId);
+    await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "suspended" }),
+    });
+    setPendingId(null);
+    fetchUsers();
+  };
+
+  const handleActivate = async (userId: string) => {
+    setPendingId(userId);
+    await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "active" }),
+    });
+    setPendingId(null);
+    fetchUsers();
+  };
+
+  const handleDelete = async (userId: string) => {
+    setPendingId(userId);
+    await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+    setPendingId(null);
+    fetchUsers();
+  };
+
+  const sortedUsers = [...users].sort((a, b) => {
+    if (sortBy === "Newest First") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sortBy === "Oldest First") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sortBy === "Name A–Z") return (a.name || "").localeCompare(b.name || "");
+    if (sortBy === "Name Z–A") return (b.name || "").localeCompare(a.name || "");
+    if (sortBy === "Most Applications") return b.applications - a.applications;
+    return 0;
+  });
+
+  const counts = {
+    All: users.length,
+    Active: users.filter((u) => u.status === "Active").length,
+    Inactive: users.filter((u) => u.status !== "Active").length,
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#f4f7f5] font-sans">
+      <AdminSidebar />
+      <main className="flex-1 ml-64 p-8">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-2xl font-black text-[#0d1f1a]">Manage Users</h1>
+            <p className="text-[#6b9e8a] text-sm font-medium mt-0.5">
+              {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {Object.entries(counts).map(([key, count]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  filter === key
+                    ? "bg-[#0d1f1a] text-[#00ffa3]"
+                    : "bg-white text-gray-500 hover:bg-gray-50 border border-gray-100"
+                }`}
+              >
+                {key} <span className="opacity-60">({count})</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="bg-white rounded-[35px] border border-gray-100 shadow-sm p-8">
-          <div className="relative mb-10">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#f1fcf9] border-none rounded-full py-4 pl-16 pr-6 text-sm font-medium focus:ring-2 focus:ring-[#00ffa3]/20 transition-all outline-none"
-              placeholder="Search users..."
-            />
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {[
+            { label: "Total Users", value: users.length.toLocaleString(), sub: "Job seekers", dark: true },
+            { label: "Active Users", value: users.filter((u) => u.status === "Active").length.toLocaleString(), sub: `${Math.round((users.filter((u) => u.status === "Active").length / Math.max(users.length, 1)) * 100)}% of total`, dark: false },
+            { label: "New This Month", value: users.filter((u) => new Date(u.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length.toLocaleString(), sub: "Last 30 days", dark: false },
+          ].map((c, i) => (
+            <div key={i} className={`${c.dark ? "bg-[#0d1f1a]" : "bg-white border border-gray-100"} rounded-2xl p-5 shadow-sm`}>
+              <p className={`text-xs font-bold mb-3 ${c.dark ? "text-[#6b9e8a]" : "text-gray-400"}`}>{c.label}</p>
+              <p className={`text-2xl font-black ${c.dark ? "text-white" : "text-[#0d1f1a]"}`}>{c.value}</p>
+              <p className={`text-xs font-bold mt-1 ${c.dark ? "text-[#00ffa3]" : "text-[#6b9e8a]"}`}>{c.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
+          <div className="flex items-center justify-between p-5 border-b border-gray-50">
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={15} />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="bg-[#f4f7f5] border-none rounded-xl py-2.5 pl-11 pr-5 text-sm font-medium w-72 focus:outline-none focus:ring-2 focus:ring-[#00ffa3]/30"
+              />
+            </form>
+            <SortDropdown sortBy={sortBy} onChange={setSortBy} options={sortOptions} />
           </div>
 
           {loading ? (
-            <div className="text-sm text-gray-500">Loading users...</div>
+            <div className="p-8 text-center text-sm text-gray-400">Loading users...</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-separate border-spacing-y-4">
-                <thead>
-                  <tr className="text-left text-xs font-black text-[#1a1a1a] uppercase tracking-wider">
-                    <th className="px-6 pb-2">Name</th>
-                    <th className="px-6 pb-2">Email</th>
-                    <th className="px-6 pb-2">Joined</th>
-                    <th className="px-6 pb-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((user) => (
-                    <tr key={user.id} className="group border-b border-gray-50 last:border-none">
-                      <td className="px-6 py-4">
-                        <span className="font-extrabold text-[#1a1a1a] text-sm">
-                          {user.firstName || user.lastName
-                            ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
-                            : "—"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-bold text-gray-600">{user.email}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-bold text-gray-400">
-                          {new Date(user.createdAt).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete user"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
+            <table className="w-full">
+              <thead>
+                <tr className="bg-[#f9fafb] text-left">
+                  {["User", "Status", "Applications", "Joined", ""].map((h) => (
+                    <th key={h} className="px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
-                </tbody>
-              </table>
-              {filtered.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-8">No users found.</p>
-              )}
-            </div>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {sortedUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">No users found.</td>
+                  </tr>
+                ) : (
+                  sortedUsers.map((user) => {
+                    const s = statusConfig[user.status] || statusConfig.Inactive;
+                    const isPending = pendingId === user.id;
+                    return (
+                      <tr key={user.id} className={`hover:bg-[#f9fffe] transition-colors ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black text-[#0d1f1a] bg-[#e8f5e9]">
+                              {(user.name || user.email)[0]?.toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm text-[#0d1f1a]">{user.name || "Unknown"}</p>
+                              <p className="text-[11px] text-gray-400">{user.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${s.bg} ${s.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                            {user.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#00ffa3] rounded-full" style={{ width: `${Math.min((user.applications / 20) * 100, 100)}%` }} />
+                            </div>
+                            <span className="text-xs font-bold text-gray-500">{user.applications}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-gray-400">
+                          {new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </td>
+                        <td className="px-6 py-4">
+                          <ActionMenu
+                            user={user}
+                            onSuspend={() => handleSuspend(user.id)}
+                            onActivate={() => handleActivate(user.id)}
+                            onDelete={() => handleDelete(user.id)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           )}
         </div>
       </main>
     </div>
   );
-};
-
-export default ManageUsers;
+}

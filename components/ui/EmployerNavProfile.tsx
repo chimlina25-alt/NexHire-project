@@ -1,60 +1,35 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Link from "next/link";
-
-type Profile = {
-  companyName: string;
-  profileImage: string | null;
-};
+import { useEmployerProfile } from "@/context/EmployerProfileContext";
 
 export default function EmployerNavProfile() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { profile } = useEmployerProfile();
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch("/api/auth/employer-profile", {
-          cache: "no-store",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setProfile({
-            companyName:  data.companyName  ?? "Company",
-            profileImage: data.profileImage ?? null,
-          });
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    load();
-  }, []);
-
-  const initial = profile?.companyName?.charAt(0)?.toUpperCase() ?? "C";
+  const name = profile?.companyName || "Company";
+  const initial = name.charAt(0).toUpperCase();
 
   return (
     <Link href="/employer_profile">
-      <div className="flex items-center gap-3 cursor-pointer group">
+      <div className="group flex cursor-pointer items-center gap-3">
         <div className="text-right">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-            Company
-          </p>
-          <p className="text-sm font-bold text-white group-hover:text-[#40b594] transition-colors truncate max-w-[120px]">
-            {profile?.companyName ?? "Profile"}
+          <p className="text-[10px] uppercase tracking-widest text-gray-500">Company</p>
+          <p className="text-sm font-bold text-white transition-colors group-hover:text-[#40b594]">
+            {name}
           </p>
         </div>
-        <div className="w-10 h-10 bg-[#40b594] rounded-full flex items-center justify-center font-extrabold text-[#051612] text-sm overflow-hidden flex-shrink-0">
-          {profile?.profileImage ? (
-            <img
-              src={profile.profileImage}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            initial
-          )}
-        </div>
+        {profile?.profileImage ? (
+          <img
+            src={profile.profileImage}
+            alt={name}
+            className="h-10 w-10 rounded-full object-cover border-2 border-[#40b594]"
+          />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#40b594] text-sm font-extrabold text-[#051612]">
+            {initial}
+          </div>
+        )}
       </div>
     </Link>
   );

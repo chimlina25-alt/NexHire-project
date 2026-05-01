@@ -1,11 +1,5 @@
-// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createHash } from 'crypto';
-
-function hashText(value: string) {
-  return createHash('sha256').update(value).digest('hex');
-}
 
 const protectedEmployerRoutes = [
   '/dashboard',
@@ -41,7 +35,6 @@ const publicRoutes = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Always allow public routes and API routes
   if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
@@ -70,7 +63,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Validate session by calling the database via edge-compatible fetch
   try {
     const baseUrl = request.nextUrl.origin;
     const validateRes = await fetch(`${baseUrl}/api/auth/validate-session`, {
@@ -91,16 +83,13 @@ export async function middleware(request: NextRequest) {
     const user = data.user;
 
     if (!user) {
-      const loginUrl = new URL('/login', request.url);
-      return NextResponse.redirect(loginUrl);
+      return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Job seeker trying to access employer routes
     if (isProtectedEmployerRoute && user.role !== 'employer') {
       return NextResponse.redirect(new URL('/home_page', request.url));
     }
 
-    // Employer trying to access job seeker routes
     if (isProtectedJobSeekerRoute && user.role !== 'job_seeker') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
@@ -108,9 +97,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error('MIDDLEWARE ERROR:', error);
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 }
 
@@ -142,3 +129,12 @@ export const config = {
     '/job_seeker_setting/:path*',
   ],
 };
+const protectedAdminRoutes = [
+  '/admin_dashboard',
+  '/manage_user',
+  '/admin_employer',
+  '/job_station',
+  '/admin_subscription',
+  '/broadcast',
+  '/admin_message',
+];

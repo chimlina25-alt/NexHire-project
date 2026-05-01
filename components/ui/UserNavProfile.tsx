@@ -1,55 +1,49 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
-type MeResponse = {
-  userId: string;
-  email: string;
-  role: "employer" | "job_seeker";
-  displayName: string;
-  avatar: string | null;
-  profilePath: string;
-};
+type Profile = { firstName: string; lastName: string; profileImage: string };
 
 export default function UserNavProfile() {
-  const [me, setMe] = useState<MeResponse | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  const load = async () => {
+    try {
+      const res = await fetch("/api/auth/job-seeker-profile", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setProfile({
+          firstName: data.firstName || "",
+          lastName: data.lastName || "",
+          profileImage: data.profileImage || "",
+        });
+      }
+    } catch (err) { console.error(err); }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = await res.json();
-        if (res.ok) {
-          setMe(data);
-        }
-      } catch (error) {
-        console.error("LOAD USER NAV PROFILE ERROR:", error);
-      }
-    };
-
     load();
+    const handler = () => load();
+    window.addEventListener("profileUpdated", handler);
+    return () => window.removeEventListener("profileUpdated", handler);
   }, []);
 
-  const displayName = me?.displayName || "Profile";
-  const avatar = me?.avatar || null;
-  const profilePath = me?.profilePath || "/profile";
-  const initial = displayName.charAt(0).toUpperCase() || "U";
+  const fullName = profile ? `${profile.firstName} ${profile.lastName}`.trim() || "Profile" : "Profile";
+  const initials = profile?.firstName?.charAt(0)?.toUpperCase() || "U";
 
   return (
-    <Link href={profilePath}>
-      <div className="flex items-center gap-4 cursor-pointer">
+    <Link href="/profile">
+      <div className="flex items-center gap-3 cursor-pointer group">
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-wider text-gray-400">User name</p>
-          <p className="text-sm font-bold truncate max-w-[140px] text-white">{displayName}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest">Signed in as</p>
+          <p className="text-sm font-bold text-white group-hover:text-[#40b594] transition-colors truncate max-w-[120px]">
+            {fullName}
+          </p>
         </div>
-
-        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2d4f45] font-bold text-white">
-          {avatar ? (
-            <img src={avatar} alt={displayName} className="h-full w-full object-cover" />
-          ) : (
-            initial
-          )}
+        <div className="w-10 h-10 rounded-full bg-[#40b594] flex items-center justify-center font-extrabold text-[#051612] text-sm overflow-hidden flex-shrink-0">
+          {profile?.profileImage ? (
+            <img src={profile.profileImage} alt={fullName} className="w-full h-full object-cover" />
+          ) : (initials)}
         </div>
       </div>
     </Link>

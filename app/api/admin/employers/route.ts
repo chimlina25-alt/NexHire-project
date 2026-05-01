@@ -1,58 +1,80 @@
 import { NextResponse } from "next/server";
-import { count, desc, eq } from "drizzle-orm";
+import { eq, count, desc } from "drizzle-orm";
 import { db } from "@/app/db";
-import { employerProfiles, jobs, users } from "@/app/db/schema";
+import { users, employerProfiles, jobs, subscriptions } from "@/app/db/schema";
+import { getCurrentAdmin } from "@/lib/admin-auth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const rows = await db
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const search = searchParams.get("search") || "";
+
+    const employers = await db
       .select({
         id: users.id,
         email: users.email,
         createdAt: users.createdAt,
+        isEmailVerified: users.isEmailVerified,
         companyName: employerProfiles.companyName,
         industry: employerProfiles.industry,
+        currentAddress: employerProfiles.currentAddress,
         profileImage: employerProfiles.profileImage,
-        contact: employerProfiles.contact,
+        companySize: employerProfiles.companySize,
       })
       .from(users)
       .leftJoin(employerProfiles, eq(employerProfiles.userId, users.id))
       .where(eq(users.role, "employer"))
       .orderBy(desc(users.createdAt));
 
-    const withJobCounts = await Promise.all(
-      rows.map(async (row) => {
+    // Search filter
+    let filtered = employers;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (e) =>
+          (e.companyName || "").toLowerCase().includes(q) ||
+          e.email.toLowerCase().includes(q)
+      );
+    }
+
+    // Add job counts and subscription plan
+    const withData = await Promise.all(
+      filtered.map(async (e) => {
         const [jobCount] = await db
           .select({ count: count() })
           .from(jobs)
-          .where(eq(jobs.employerId, row.id));
+          .where(eq(jobs.employerId, e.id));
+
+        const [sub] = await db
+          .select()
+          .from(subscriptions)
+          .where(eq(subscriptions.employerId, e.id))
+          .limit(1);
+
+        let planLabel = "Free";
+        if (sub?.plan === "premium") planLabel = "Premium";
+        else if (sub?.plan === "standard") planLabel = "Standard";
+
         return {
-          ...row,
-          jobPosts: jobCount?.count ?? 0,
+          ...e,
+          jobs: Number(jobCount.count),
+          plan: planLabel,
+          status: e.isEmailVerified ? "Active" : "Inactive",
         };
       })
     );
 
-    return NextResponse.json(withJobCounts);
+    return NextResponse.json(withData);
   } catch (error) {
-    console.error("ADMIN EMPLOYERS GET ERROR:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: Request) {
-  try {
-    const body = await req.json();
-    const { userId } = body;
-
-    if (!userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
-    }
-
-    await db.delete(users).where(eq(users.id, userId));
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("ADMIN EMPLOYERS DELETE ERROR:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("ADMIN EMPLOYERS ERROR:", error);
+    return NextResponse.json(
+      { error: "Internal server error: " + String(error) },
+      { status: 500 }
+    );
   }
 }
