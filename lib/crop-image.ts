@@ -8,6 +8,7 @@ export type Area = {
 function createImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = "anonymous"; // ← add this line BEFORE image.src
     image.addEventListener("load", () => resolve(image));
     image.addEventListener("error", (error) => reject(error));
     image.src = url;
@@ -23,9 +24,7 @@ export async function getCroppedImg(
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  if (!ctx) {
-    throw new Error("Could not create canvas context");
-  }
+  if (!ctx) throw new Error("Could not create canvas context");
 
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
@@ -46,15 +45,10 @@ export async function getCroppedImg(
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error("Canvas is empty"));
+          reject(new Error("Canvas toBlob returned null — image may be cross-origin blocked"));
           return;
         }
-
-        resolve(
-          new File([blob], fileName, {
-            type: "image/jpeg",
-          })
-        );
+        resolve(new File([blob], fileName, { type: "image/jpeg" }));
       },
       "image/jpeg",
       0.92

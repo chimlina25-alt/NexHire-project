@@ -454,24 +454,28 @@ const JobSeekerHome = () => {
   }, []);
 
   const fetchJobs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (searchQuery) params.set("search", searchQuery);
-      if (filters.jobType) params.set("type", filters.jobType);
-      if (filters.arrangement) params.set("arrangement", filters.arrangement);
-      if (filters.experience) params.set("experience", filters.experience);
+  setLoading(true);
+  try {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("search", searchQuery);
+    if (filters.jobType) params.set("employmentType", filters.jobType);
+    if (filters.arrangement) params.set("arrangement", filters.arrangement);
+    if (filters.experience) params.set("experience", filters.experience);
 
-      const res = await fetch(`/api/jobs?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (res.ok) setJobListings(data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+    const res = await fetch(`/api/jobs?${params.toString()}`, { cache: "no-store" });
+    const data = await res.json();
+
+    // API returns { jobs: [...], total, page, limit } — extract the array
+    if (res.ok) {
+      const jobArray = Array.isArray(data) ? data : (data.jobs ?? []);
+      setJobListings(jobArray);
     }
-  }, [searchQuery, filters]);
-
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+}, [searchQuery, filters]);
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -520,13 +524,13 @@ const JobSeekerHome = () => {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const sortedJobs = [...jobListings].sort((a, b) => {
-    if (sortBy === "Newest First")
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    if (sortBy === "Highest Salary")
-      return (b.salaryMax ?? 0) - (a.salaryMax ?? 0);
-    return 0;
-  });
+  const sortedJobs = [...(Array.isArray(jobListings) ? jobListings : [])].sort((a, b) => {
+  if (sortBy === "Newest First")
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  if (sortBy === "Highest Salary")
+    return (b.salaryMax ?? 0) - (a.salaryMax ?? 0);
+  return 0;
+});
 
   const pillFilters: { key: keyof typeof filters; label: string; options: string[] }[] = [
     { key: "jobType", label: "Job Type", options: jobTypeOptions },

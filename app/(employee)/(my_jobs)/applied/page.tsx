@@ -1,16 +1,17 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { MoreVertical, Archive } from "lucide-react"; // Added Archive icon
+import { MoreVertical, Archive } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import UserNavProfile from "@/components/ui/UserNavProfile";
 
 type AppliedJob = {
   id: string;
+  jobId: string;
   title: string;
   company: string;
   description: string;
   salary: string;
-  tags: string[];
   status: string;
 };
 
@@ -25,7 +26,7 @@ const MyApplicationsApplied = () => {
   const pathname = usePathname();
   const [appliedJobs, setAppliedJobs] = useState<AppliedJob[]>([]);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState<string | null>(null); // Track which menu is open
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   const tabs = [
     { name: "Saved", path: "/saved" },
@@ -40,16 +41,15 @@ const MyApplicationsApplied = () => {
         const res = await fetch("/api/applications", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) return;
-        // Backend should already filter out archived, but we double-check
         const mapped = (data || [])
-          .filter((item: any) => item.status !== "archived" && item.status !== "withdrawn") 
+          .filter((item: any) => item.status !== "archived" && item.status !== "withdrawn")
           .map((item: any) => ({
             id: item.id,
+            jobId: item.jobId,
             title: item.jobTitle,
-            company: item.company,
+            company: item.companyName ?? item.company ?? "",
             description: item.description ?? "",
             salary: formatSalary(item.salaryMin, item.salaryMax),
-            tags: [item.status],
             status: item.status,
           }));
         setAppliedJobs(mapped);
@@ -62,22 +62,19 @@ const MyApplicationsApplied = () => {
     fetchApplied();
   }, []);
 
-  // ✅ NEW: Handle Archive Action
+  // Archive by applicationId (the real application ID)
   const handleArchive = async (applicationId: string) => {
     try {
-      const res = await fetch(`/api/applications/${applicationId}/archive`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/applications/${applicationId}/archive`, { method: "POST" });
       if (res.ok) {
-        // Remove from UI immediately
         setAppliedJobs((prev) => prev.filter((j) => j.id !== applicationId));
         setMenuOpen(null);
       } else {
-        alert("Failed to archive job");
+        alert("Failed to archive application");
       }
     } catch (error) {
       console.error("Archive error:", error);
-      alert("Error archiving job");
+      alert("Error archiving application");
     }
   };
 
@@ -85,6 +82,7 @@ const MyApplicationsApplied = () => {
     pending: "bg-yellow-50 text-yellow-700",
     accepted: "bg-green-50 text-green-700",
     interview: "bg-blue-50 text-blue-700",
+    rejected: "bg-red-50 text-red-700",
   };
 
   return (
@@ -101,15 +99,7 @@ const MyApplicationsApplied = () => {
           <Link href="/notification"><button className="hover:text-gray-300 transition-colors">Notification</button></Link>
           <Link href="/setting"><button className="hover:text-gray-300 transition-colors">Settings</button></Link>
         </nav>
-        <Link href="/profile">
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">User name</p>
-              <p className="text-sm font-bold">Profile</p>
-            </div>
-            <div className="w-10 h-10 bg-[#2d4f45] rounded-full flex items-center justify-center font-bold text-white">U</div>
-          </div>
-        </Link>
+        <UserNavProfile />
       </header>
 
       <main className="max-w-5xl mx-auto p-12">
@@ -131,7 +121,7 @@ const MyApplicationsApplied = () => {
             );
           })}
         </div>
-        
+
         <div className="flex gap-8 mb-8 text-sm font-bold text-gray-600">
           <span>Total: {appliedJobs.length}</span>
           <span>Accepted: {appliedJobs.filter((j) => j.status === "accepted").length}</span>
@@ -155,16 +145,14 @@ const MyApplicationsApplied = () => {
                     <span className={`px-4 py-1.5 rounded-full font-bold text-xs ${statusColor[job.status] ?? "bg-gray-100 text-gray-600"}`}>
                       {job.status}
                     </span>
-                    
-                    {/* ✅ UPDATED: Dropdown Menu with Archive */}
                     <div className="relative">
                       <button onClick={() => setMenuOpen(menuOpen === job.id ? null : job.id)} className="text-gray-400 hover:text-black transition-colors">
                         <MoreVertical size={22} />
                       </button>
                       {menuOpen === job.id && (
                         <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-10">
-                          <button 
-                            onClick={() => handleArchive(job.id)} 
+                          <button
+                            onClick={() => handleArchive(job.id)}
                             className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-[#6b7f79] hover:bg-[#f0f9f6] rounded-xl transition-colors"
                           >
                             <Archive size={14} /> Archive
@@ -174,7 +162,7 @@ const MyApplicationsApplied = () => {
                     </div>
                   </div>
                 </div>
-                <p className="text-gray-400 text-sm mb-6 max-w-2xl">{job.description}</p>
+                <p className="text-gray-400 text-sm mb-6 max-w-2xl line-clamp-2">{job.description}</p>
                 <div className="flex items-center gap-6">
                   <span className="text-lg font-extrabold text-[#1a1a1a]">{job.salary}</span>
                 </div>
@@ -186,4 +174,5 @@ const MyApplicationsApplied = () => {
     </div>
   );
 };
+
 export default MyApplicationsApplied;

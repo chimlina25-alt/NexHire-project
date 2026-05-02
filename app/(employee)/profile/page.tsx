@@ -15,6 +15,7 @@ import {
   Trash2,
   FileText,
   Upload,
+  CheckCircle2,
 } from "lucide-react";
 import ImageCropModal from "@/components/ui/ImageCropModal";
 import UserNavProfile from "@/components/ui/UserNavProfile";
@@ -33,8 +34,9 @@ type JobSeekerForm = {
   profileImageUrl: string;
 };
 
-const cardClass =
-  "rounded-[28px] border border-[#e6eeea] bg-white shadow-[0_18px_50px_rgba(7,28,22,0.06)]";
+type ChangeEvent = React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
+
+const cardClass = "rounded-[28px] border border-[#e6eeea] bg-white shadow-[0_18px_50px_rgba(7,28,22,0.06)]";
 
 export default function JobSeekerProfile() {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -44,6 +46,7 @@ export default function JobSeekerProfile() {
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [profileImage, setProfileImage] = React.useState<File | null>(null);
   const [sourceImageUrl, setSourceImageUrl] = React.useState<string | null>(null);
@@ -52,6 +55,7 @@ export default function JobSeekerProfile() {
 
   const [cvFile, setCvFile] = React.useState<File | null>(null);
   const [cvRemoved, setCvRemoved] = React.useState(false);
+  const [cvDragging, setCvDragging] = React.useState(false);
 
   const emptyForm: JobSeekerForm = {
     description: "",
@@ -105,24 +109,22 @@ export default function JobSeekerProfile() {
     loadProfile();
   }, []);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    setDraft((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleChange = (e: ChangeEvent) => {
+    const target = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    setDraft((prev) => ({ ...prev, [target.name]: target.value }));
   };
 
-  const openFilePicker = () => fileInputRef.current?.click();
-  const openCvPicker = () => cvInputRef.current?.click();
+  // ── Profile image ──────────────────────────────────────────────────────────
 
-  const handleCircleAction = () => {
-    if (sourceImageUrl || saved.profileImageUrl) {
-      setCropOpen(true);
-      return;
-    }
-    openFilePicker();
+  const openFilePicker = () => setTimeout(() => fileInputRef.current?.click(), 0);
+
+  const handleCameraClick = () => {
+    const hasImage = !!(croppedPreviewUrl || sourceImageUrl || saved.profileImageUrl);
+    if (hasImage) setCropOpen(true);
+    else openFilePicker();
   };
 
-  const handleDeleteImage = () => {
+  const handleDeleteImage = async () => {
     if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
     setSourceImageUrl(null);
@@ -132,6 +134,20 @@ export default function JobSeekerProfile() {
     setSaved((prev) => ({ ...prev, profileImageUrl: "" }));
     setDraft((prev) => ({ ...prev, profileImageUrl: "" }));
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!isEditing) {
+      const formData = new FormData();
+      formData.append("firstName", saved.firstName);
+      formData.append("lastName", saved.lastName);
+      formData.append("description", saved.description);
+      formData.append("contact", saved.contact);
+      formData.append("address", saved.address);
+      formData.append("educationLevel", saved.educationLevel);
+      formData.append("schoolUniversity", saved.schoolUniversity);
+      formData.append("year", saved.year);
+      formData.append("removeProfileImage", "1");
+      await fetch("/api/auth/job-seeker-profile", { method: "POST", body: formData });
+      window.dispatchEvent(new Event("profileUpdated"));
+    }
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,18 +173,25 @@ export default function JobSeekerProfile() {
     e.target.value = "";
   };
 
-  const handleCropSave = (file: File, previewUrl: string) => {
+  const handleCropSave = async (file: File, previewUrl: string) => {
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-    setProfileImage(file);
-    setCroppedPreviewUrl(previewUrl);
     setCropOpen(false);
+    if (!isEditing) {
+      setCroppedPreviewUrl(previewUrl);
+      await autoSaveProfileImage(file, previewUrl);
+    } else {
+      setProfileImage(file);
+      setCroppedPreviewUrl(previewUrl);
+    }
   };
 
   const handleCropClose = () => setCropOpen(false);
 
-  const handleCvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (!file) return;
+  // ── CV ─────────────────────────────────────────────────────────────────────
+
+  const openCvPicker = () => setTimeout(() => cvInputRef.current?.click(), 0);
+
+  const processCvFile = (file: File) => {
     const allowedTypes = [
       "application/pdf",
       "application/msword",
@@ -176,38 +199,143 @@ export default function JobSeekerProfile() {
     ];
     if (!allowedTypes.includes(file.type)) {
       alert("Only PDF, DOC, and DOCX files are allowed");
-      e.target.value = "";
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
       alert("CV must be 10MB or smaller");
-      e.target.value = "";
       return;
     }
     setCvFile(file);
     setCvRemoved(false);
     setDraft((prev) => ({ ...prev, cvFileName: file.name }));
-    e.target.value = "";
   };
 
-  const handleRemoveCv = () => {
+  const handleCvChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    processCvFile(file);
+    e.target.value = "";
+    if (!isEditing) {
+      await autoSaveWithCv(file);
+    }
+  };
+
+  const handleCvDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setCvDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processCvFile(file);
+    if (!isEditing) {
+      await autoSaveWithCv(file);
+    }
+  };
+
+  const handleRemoveCv = async () => {
     setCvFile(null);
     setCvRemoved(true);
     setDraft((prev) => ({ ...prev, cvFileName: "", cvUrl: "" }));
     setSaved((prev) => ({ ...prev, cvFileName: "", cvUrl: "" }));
     if (cvInputRef.current) cvInputRef.current.value = "";
+    if (!isEditing) {
+      const formData = new FormData();
+      formData.append("firstName", saved.firstName);
+      formData.append("lastName", saved.lastName);
+      formData.append("description", saved.description);
+      formData.append("contact", saved.contact);
+      formData.append("address", saved.address);
+      formData.append("educationLevel", saved.educationLevel);
+      formData.append("schoolUniversity", saved.schoolUniversity);
+      formData.append("year", saved.year);
+      formData.append("removeCv", "1");
+      await fetch("/api/auth/job-seeker-profile", { method: "POST", body: formData });
+    }
   };
 
-  React.useEffect(() => {
-    return () => {
-      if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
-      if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-    };
-  }, [sourceImageUrl, croppedPreviewUrl]);
+  // ── Auto-save helpers ──────────────────────────────────────────────────────
+
+  const autoSaveWithCv = async (file: File) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const formData = new FormData();
+      formData.append("firstName", saved.firstName);
+      formData.append("lastName", saved.lastName);
+      formData.append("description", saved.description);
+      formData.append("contact", saved.contact);
+      formData.append("address", saved.address);
+      formData.append("educationLevel", saved.educationLevel);
+      formData.append("schoolUniversity", saved.schoolUniversity);
+      formData.append("year", saved.year);
+      formData.append("cvFile", file, file.name);
+      const res = await fetch("/api/auth/job-seeker-profile", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok) {
+        setSaved((prev) => ({
+          ...prev,
+          cvUrl: data.cvUrl ?? prev.cvUrl,
+          cvFileName: data.cvFileName ?? prev.cvFileName,
+        }));
+        setDraft((prev) => ({
+          ...prev,
+          cvUrl: data.cvUrl ?? prev.cvUrl,
+          cvFileName: data.cvFileName ?? prev.cvFileName,
+        }));
+        setCvFile(null);
+        setCvRemoved(false);
+        setSaveSuccess(true);
+      } else {
+        setError(data.error || "Failed to upload CV");
+      }
+    } catch {
+      setError("Something went wrong uploading CV");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const autoSaveProfileImage = async (file: File, previewUrl: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const formData = new FormData();
+      formData.append("firstName", saved.firstName);
+      formData.append("lastName", saved.lastName);
+      formData.append("description", saved.description);
+      formData.append("contact", saved.contact);
+      formData.append("address", saved.address);
+      formData.append("educationLevel", saved.educationLevel);
+      formData.append("schoolUniversity", saved.schoolUniversity);
+      formData.append("year", saved.year);
+      formData.append("profileImage", file, file.name);
+      const res = await fetch("/api/auth/job-seeker-profile", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok) {
+        const newUrl = data.profileImageUrl || data.profileImage || previewUrl;
+        setSaved((prev) => ({ ...prev, profileImageUrl: newUrl }));
+        setDraft((prev) => ({ ...prev, profileImageUrl: newUrl }));
+        URL.revokeObjectURL(previewUrl);
+        setCroppedPreviewUrl(null);
+        setSourceImageUrl(null);
+        setProfileImage(null);
+        setSaveSuccess(true);
+        window.dispatchEvent(new Event("profileUpdated"));
+      } else {
+        setError(data.error || "Failed to upload photo");
+      }
+    } catch {
+      setError("Something went wrong uploading photo");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Edit / Cancel / Save ───────────────────────────────────────────────────
 
   const handleEdit = () => {
     setDraft(saved);
     setError(null);
+    setSaveSuccess(false);
     setCvRemoved(false);
     setIsEditing(true);
   };
@@ -217,6 +345,12 @@ export default function JobSeekerProfile() {
     setCvFile(null);
     setCvRemoved(false);
     setError(null);
+    setSaveSuccess(false);
+    if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
+    if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
+    setSourceImageUrl(null);
+    setCroppedPreviewUrl(null);
+    setProfileImage(null);
     setIsEditing(false);
   };
 
@@ -224,6 +358,8 @@ export default function JobSeekerProfile() {
     try {
       setLoading(true);
       setError(null);
+      setSaveSuccess(false);
+
       const formData = new FormData();
       formData.append("description", draft.description);
       formData.append("firstName", draft.firstName);
@@ -233,30 +369,56 @@ export default function JobSeekerProfile() {
       formData.append("educationLevel", draft.educationLevel);
       formData.append("schoolUniversity", draft.schoolUniversity);
       formData.append("year", draft.year);
-      if (profileImage) formData.append("profileImage", profileImage);
-      if (cvFile) formData.append("cvFile", cvFile);
-      if (cvRemoved) formData.append("removeCv", "1");
+
+      if (profileImage && profileImage.size > 0) {
+        formData.append("profileImage", profileImage, profileImage.name || "profile.jpg");
+      }
+
+      if (saved.profileImageUrl && !profileImage && !croppedPreviewUrl && !sourceImageUrl) {
+        formData.append("removeProfileImage", "1");
+      }
+
+      if (cvFile && cvFile.size > 0) {
+        formData.append("cvFile", cvFile, cvFile.name || "cv.pdf");
+      }
+      if (cvRemoved) {
+        formData.append("removeCv", "1");
+      }
 
       const res = await fetch("/api/auth/job-seeker-profile", {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
+
       if (!res.ok) {
         setError(data.error || "Failed to update profile");
         return;
       }
+
+      const newProfileImageUrl =
+        data.profileImageUrl || data.profileImage || draft.profileImageUrl;
+
       const nextSaved: JobSeekerForm = {
         ...draft,
         cvUrl: data.cvUrl ?? (cvRemoved ? "" : draft.cvUrl),
         cvFileName: data.cvFileName ?? (cvRemoved ? "" : draft.cvFileName),
-        profileImageUrl: data.profileImageUrl || draft.profileImageUrl,
+        profileImageUrl: newProfileImageUrl,
       };
+
       setSaved(nextSaved);
       setDraft(nextSaved);
+
+      if (croppedPreviewUrl) { URL.revokeObjectURL(croppedPreviewUrl); setCroppedPreviewUrl(null); }
+      if (sourceImageUrl) { URL.revokeObjectURL(sourceImageUrl); setSourceImageUrl(null); }
+
+      setProfileImage(null);
       setCvFile(null);
       setCvRemoved(false);
+      setSaveSuccess(true);
       setIsEditing(false);
+
       window.dispatchEvent(new Event("profileUpdated"));
     } catch (err) {
       console.error("JOB SEEKER UPDATE ERROR:", err);
@@ -266,25 +428,48 @@ export default function JobSeekerProfile() {
     }
   };
 
+  React.useEffect(() => {
+    return () => {
+      if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
+      if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Derived values ─────────────────────────────────────────────────────────
+
   const fullName = `${saved.firstName} ${saved.lastName}`.trim() || "Profile";
   const profile = isEditing ? draft : saved;
   const displayImageSrc = croppedPreviewUrl || sourceImageUrl || saved.profileImageUrl || "";
 
+  const currentCvFileName = cvRemoved
+    ? ""
+    : cvFile
+    ? cvFile.name
+    : draft.cvFileName || saved.cvFileName;
+
+  const currentCvUrl = cvRemoved ? "" : cvFile ? "" : draft.cvUrl || saved.cvUrl;
+
+  const cvFileSize = cvFile
+    ? cvFile.size < 1024 * 1024
+      ? `${(cvFile.size / 1024).toFixed(0)} KB`
+      : `${(cvFile.size / (1024 * 1024)).toFixed(1)} MB`
+    : null;
+
   const completionFields = [
-    saved.firstName,
-    saved.lastName,
-    saved.contact,
-    saved.address,
-    saved.description,
-    saved.educationLevel,
-    saved.schoolUniversity,
-    saved.year,
-    saved.cvFileName || saved.cvUrl,
-    saved.profileImageUrl || croppedPreviewUrl || sourceImageUrl,
+    saved.firstName, saved.lastName, saved.contact, saved.address,
+    saved.description, saved.educationLevel, saved.schoolUniversity,
+    saved.year, saved.cvFileName || saved.cvUrl, saved.profileImageUrl,
   ];
   const completion = Math.round(
     (completionFields.filter(Boolean).length / completionFields.length) * 100
   );
+
+  const isWordDoc = (filename: string) =>
+    filename.endsWith(".doc") || filename.endsWith(".docx");
+
+  const getCvViewUrl = (url: string, filename: string) =>
+  `/api/cv?url=${encodeURIComponent(url)}`;
 
   if (pageLoading) {
     return (
@@ -319,9 +504,7 @@ export default function JobSeekerProfile() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(64,181,148,0.22),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_28%)]" />
           <div className="relative mx-auto max-w-7xl px-8 py-12 md:py-16">
             <div className="max-w-3xl">
-              <h1 className="text-3xl font-black tracking-tight text-white md:text-5xl">
-                {fullName}
-              </h1>
+              <h1 className="text-3xl font-black tracking-tight text-white md:text-5xl">{fullName}</h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 md:text-base">
                 Professional profile, photo, education, and CV storage in one clean layout.
               </p>
@@ -332,9 +515,24 @@ export default function JobSeekerProfile() {
         {/* MAIN */}
         <main className="mx-auto max-w-7xl px-8 pt-8">
 
+          {loading && !isEditing && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-2xl text-blue-700 text-sm font-medium flex items-center gap-3">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              Uploading...
+            </div>
+          )}
+
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-medium">
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-medium flex items-center gap-3">
+              <X size={16} className="shrink-0" />
               {error}
+            </div>
+          )}
+
+          {saveSuccess && !isEditing && (
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-sm font-medium flex items-center gap-3">
+              <CheckCircle2 size={16} className="shrink-0" />
+              Saved successfully!
             </div>
           )}
 
@@ -342,7 +540,9 @@ export default function JobSeekerProfile() {
           <section className={`${cardClass} mb-8 p-6 md:p-8`}>
             <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col items-center gap-6 text-center lg:flex-row lg:text-left">
-                <div className="relative">
+
+                {/* Avatar */}
+                <div className="relative shrink-0">
                   <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border-[6px] border-white bg-[linear-gradient(135deg,#21483d,#40b594)] shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:h-40 md:w-40">
                     {displayImageSrc ? (
                       <img src={displayImageSrc} alt="Profile" className="h-full w-full object-cover" />
@@ -352,22 +552,37 @@ export default function JobSeekerProfile() {
                       </svg>
                     )}
                   </div>
+
+                  {/* Camera button — always clickable */}
                   <button
                     type="button"
-                    onClick={handleCircleAction}
-                    className="absolute bottom-1 right-1 flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-[#00a37b] text-white shadow-lg"
+                    onClick={handleCameraClick}
+                    aria-label="Change profile photo"
+                    className="absolute bottom-1 right-1 flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-[#00a37b] text-white shadow-lg hover:bg-[#008f6b] transition-all cursor-pointer"
                   >
                     {displayImageSrc ? <Pencil size={18} /> : <Camera size={20} />}
                   </button>
-                  {displayImageSrc && isEditing && (
+
+                  {/* Delete button — always shown when image exists */}
+                  {displayImageSrc && (
                     <button
                       type="button"
                       onClick={handleDeleteImage}
-                      className="absolute left-1 top-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-white text-[#d11a2a] shadow-md"
+                      aria-label="Remove profile photo"
+                      className="absolute left-1 top-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-white text-[#d11a2a] shadow-md hover:bg-red-50 transition-all"
                     >
                       <Trash2 size={16} />
                     </button>
                   )}
+
+                  {/* Upload hint */}
+                  {!displayImageSrc && (
+                    <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <span className="text-[11px] font-semibold text-[#40b594]">Click to upload photo</span>
+                    </div>
+                  )}
+
+                  {/* Hidden file input — always in DOM */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -376,40 +591,31 @@ export default function JobSeekerProfile() {
                     className="hidden"
                   />
                 </div>
-                <div className="max-w-2xl">
+
+                <div className="max-w-2xl mt-4 lg:mt-0">
                   <h2 className="text-2xl font-black text-[#0d211b] md:text-3xl">{fullName}</h2>
                   <p className="mt-2 text-sm font-bold text-[#40b594]">Open to opportunities</p>
                   <p className="mt-4 text-sm leading-7 text-[#58706a]">{saved.description || "No description yet."}</p>
                 </div>
               </div>
+
               <div className="flex flex-wrap justify-center gap-3 lg:justify-end">
                 {isEditing ? (
                   <>
-                    <button
-                      type="button"
-                      onClick={handleCancel}
-                      className="rounded-2xl border border-[#d7e5df] bg-white px-5 py-3 text-sm font-bold text-[#17332b]"
-                    >
+                    <button type="button" onClick={handleCancel}
+                      className="rounded-2xl border border-[#d7e5df] bg-white px-5 py-3 text-sm font-bold text-[#17332b] hover:bg-gray-50 transition-all">
                       <span className="inline-flex items-center gap-2"><X size={16} />Cancel</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={loading}
-                      className="rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
-                    >
+                    <button type="button" onClick={handleSave} disabled={loading}
+                      className="rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white disabled:opacity-60 hover:bg-[#0d2a23] transition-all">
                       <span className="inline-flex items-center gap-2">
-                        <Save size={16} />
-                        {loading ? "Saving..." : "Save Changes"}
+                        <Save size={16} />{loading ? "Saving..." : "Save Changes"}
                       </span>
                     </button>
                   </>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleEdit}
-                    className="rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white"
-                  >
+                  <button type="button" onClick={handleEdit}
+                    className="rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white hover:bg-[#0d2a23] transition-all">
                     <span className="inline-flex items-center gap-2"><Pencil size={16} />Edit Profile</span>
                   </button>
                 )}
@@ -425,15 +631,13 @@ export default function JobSeekerProfile() {
 
               {/* Completion */}
               <section className={`${cardClass} p-6`}>
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#40b594]">
-                  Profile Completion
-                </p>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#40b594]">Profile Completion</p>
                 <div className="mb-3 flex items-end justify-between">
                   <p className="text-3xl font-black text-[#0c201a]">{completion}%</p>
-                  <p className="text-xs font-semibold text-[#6a817b]">Complete your candidate profile</p>
+                  <p className="text-xs font-semibold text-[#6a817b]">Complete your profile</p>
                 </div>
                 <div className="h-3 w-full rounded-full bg-[#e5efeb]">
-                  <div className="h-3 rounded-full bg-[#40b594]" style={{ width: `${completion}%` }} />
+                  <div className="h-3 rounded-full bg-[#40b594] transition-all" style={{ width: `${completion}%` }} />
                 </div>
               </section>
 
@@ -459,25 +663,30 @@ export default function JobSeekerProfile() {
                   </div>
                 </div>
                 <div className="rounded-3xl border border-dashed border-[#cfe2db] bg-[#f8fcfa] p-4">
-                  <p className="text-sm font-semibold text-[#17332b]">
-                    {saved.cvFileName || "No CV uploaded yet"}
-                  </p>
-                  {saved.cvUrl ? (
-  <a
-    href={saved.cvUrl}
-    target="_blank"
-    rel="noreferrer"
-    className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#0a7e61]"
-  >
-    <FileText size={16} />
-    View uploaded CV
-  </a>
-) : (
-                    <p className="mt-2 text-xs text-[#7a8f89]">PDF, DOC, or DOCX</p>
+                  {saved.cvFileName ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-[#40b594]" />
+                        <p className="text-sm font-semibold text-[#17332b] truncate">{saved.cvFileName}</p>
+                      </div>
+                      {saved.cvUrl && (
+                        <a
+                          href={getCvViewUrl(saved.cvUrl, saved.cvFileName)}
+                          target="_blank"
+                          rel="noreferrer"
+                          download={isWordDoc(saved.cvFileName) ? saved.cvFileName : undefined}
+                          className="mt-1 inline-flex items-center gap-2 text-sm font-bold text-[#0a7e61] hover:underline"
+                        >
+                          <FileText size={14} />
+                          {isWordDoc(saved.cvFileName) ? "Download CV" : "View CV"}
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-[#7a8f89]">No CV uploaded yet</p>
                   )}
                 </div>
               </section>
-
             </aside>
 
             {/* RIGHT COLUMN */}
@@ -505,11 +714,8 @@ export default function JobSeekerProfile() {
                 </div>
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                   <EditableSelect
-                    editing={isEditing}
-                    label="Education Level"
-                    name="educationLevel"
-                    value={profile.educationLevel}
-                    onChange={handleChange}
+                    editing={isEditing} label="Education Level" name="educationLevel"
+                    value={profile.educationLevel} onChange={handleChange}
                     options={["High School", "Associate", "Bachelor", "Master", "PhD"]}
                   />
                   <EditableField editing={isEditing} label="School / University" name="schoolUniversity" value={profile.schoolUniversity} onChange={handleChange} />
@@ -522,132 +728,28 @@ export default function JobSeekerProfile() {
                 <h3 className="mb-6 text-xl font-black text-[#0d211b]">About Candidate</h3>
                 {isEditing ? (
                   <textarea
-                    name="description"
-                    value={profile.description}
-                    onChange={handleChange}
-                    className="h-36 w-full resize-none rounded-3xl border border-[#d9e8e2] bg-[#f6fbf8] px-5 py-4 text-sm"
+                    name="description" value={profile.description} onChange={handleChange}
+                    placeholder="Write a short bio about yourself..."
+                    className="h-36 w-full resize-none rounded-3xl border border-[#d9e8e2] bg-[#f6fbf8] px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#40b594]"
                   />
                 ) : (
                   <p className="text-sm leading-8 text-[#405752]">{saved.description || "Not added"}</p>
                 )}
               </section>
 
-              {/* CV UPLOAD SECTION */}
+              {/* ── CV UPLOAD — always interactive ── */}
               <section className={`${cardClass} p-6 md:p-8`}>
                 <div className="mb-6 flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-black text-[#0d211b]">Upload CV</h3>
-                    <p className="mt-1 text-sm text-[#6a817b]">Store your resume directly in this profile</p>
+                    <h3 className="text-xl font-black text-[#0d211b]">Resume / CV</h3>
+                    <p className="mt-1 text-sm text-[#6a817b]">Upload your resume so employers can find you</p>
                   </div>
-                  <FileText className="text-[#40b594]" size={22} />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eff8f5] text-[#40b594]">
+                    <FileText size={22} />
+                  </div>
                 </div>
 
-                {/* VIEW MODE */}
-                {!isEditing && (
-                  <div className="rounded-[28px] border border-[#cfe2db] bg-[#f8fcfa] p-6">
-                    {saved.cvUrl && saved.cvFileName ? (
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e6f5f0] text-[#40b594] shrink-0">
-                            <FileText size={22} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-[#0d211b] truncate max-w-[200px]">
-                              {saved.cvFileName}
-                            </p>
-                            <p className="text-xs text-[#6a817b] mt-0.5">CV on file</p>
-                          </div>
-                        </div>
-                        
-                          <a
-  href={saved.cvUrl}
-  target="_blank"
-  rel="noreferrer"
-  className="inline-flex items-center gap-2 rounded-2xl bg-[#051612] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#0d2a23] transition-all"
->
-  <FileText size={15} />
-  View CV
-</a>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-6 text-center">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e6f5f0] text-[#40b594] mb-3">
-                          <FileText size={26} />
-                        </div>
-                        <p className="text-sm font-bold text-[#17332b]">No CV uploaded yet</p>
-                        <p className="text-xs text-[#7a8f89] mt-1">PDF, DOC, or DOCX · Max 10MB</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* EDIT MODE */}
-                {isEditing && (
-                  <div className="space-y-4">
-                    {(profile.cvFileName || saved.cvFileName) ? (
-                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-[#cfe2db] bg-[#f0faf6] px-5 py-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f5f0] text-[#40b594] shrink-0">
-                            <FileText size={20} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-[#0d211b] truncate">
-                              {profile.cvFileName || saved.cvFileName}
-                            </p>
-                            <p className="text-xs text-[#6a817b] mt-0.5">
-                              {cvFile ? "Ready to upload" : "Currently on file"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {saved.cvUrl && !cvFile && (
-  <a
-    href={saved.cvUrl}
-    target="_blank"
-    rel="noreferrer"
-    className="inline-flex items-center gap-1.5 rounded-xl bg-[#eff8f5] border border-[#cfe2db] px-3 py-2 text-xs font-bold text-[#0a7e61] hover:bg-[#e6f5f0] transition-all"
-  >
-    <FileText size={13} />
-    View
-  </a>
-)}
-                          <button
-                            type="button"
-                            onClick={handleRemoveCv}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition-all"
-                          >
-                            <Trash2 size={13} />
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={openCvPicker}
-                        className="w-full rounded-[28px] border-2 border-dashed border-[#cfe2db] bg-[#f8fcfa] p-8 flex flex-col items-center justify-center gap-3 hover:border-[#40b594] hover:bg-[#f0faf6] transition-all group"
-                      >
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e6f5f0] text-[#40b594] group-hover:bg-[#d1ede5] transition-all">
-                          <Upload size={24} />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-[#17332b]">Click to upload your CV</p>
-                          <p className="text-xs text-[#7a8f89] mt-1">PDF, DOC, or DOCX · Max 10MB</p>
-                        </div>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={openCvPicker}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-[#051612] px-5 py-3 text-sm font-bold text-white hover:bg-[#0d2a23] transition-all"
-                    >
-                      <Upload size={16} />
-                      {(profile.cvFileName || saved.cvFileName) ? "Replace CV" : "Upload CV"}
-                    </button>
-                  </div>
-                )}
-
+                {/* Always-in-DOM hidden input */}
                 <input
                   ref={cvInputRef}
                   type="file"
@@ -655,8 +757,83 @@ export default function JobSeekerProfile() {
                   onChange={handleCvChange}
                   className="hidden"
                 />
-              </section>
 
+                {currentCvFileName ? (
+                  /* CV exists */
+                  <div className="rounded-[24px] border-2 border-[#40b594] bg-gradient-to-br from-[#f0faf6] to-[#f8fcfa] p-5">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#051612] text-white shrink-0 shadow-md">
+                        <FileText size={24} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-extrabold text-[#0d211b] truncate">{currentCvFileName}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {cvFile ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                              Ready to upload{cvFileSize ? ` · ${cvFileSize}` : ""}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#e6f5f0] px-2 py-0.5 text-[10px] font-bold text-[#0a7e61]">
+                              <CheckCircle2 size={10} /> On file
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-3 flex-wrap">
+                      {currentCvUrl && !cvFile && (
+                        <a
+                            href={getCvViewUrl(currentCvUrl, currentCvFileName)}
+  target="_blank"
+  rel="noreferrer"
+  className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-[#cfe2db] px-4 py-2 text-xs font-bold text-[#0a7e61] hover:bg-[#e6f5f0] transition-all"
+>
+  <FileText size={13} />
+  View CV
+</a>
+                      )}
+                      <button type="button" onClick={openCvPicker}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#051612] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d2a23] transition-all">
+                        <Upload size={13} /> Replace CV
+                      </button>
+                      <button type="button" onClick={handleRemoveCv}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition-all">
+                        <Trash2 size={13} /> Remove CV
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* No CV — drag & drop zone */
+                  <>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setCvDragging(true); }}
+                      onDragLeave={() => setCvDragging(false)}
+                      onDrop={handleCvDrop}
+                      onClick={openCvPicker}
+                      className={`rounded-[24px] border-2 border-dashed p-10 text-center transition-all cursor-pointer ${
+                        cvDragging
+                          ? "border-[#40b594] bg-[#e6f5f0] scale-[1.01]"
+                          : "border-[#cfe2db] bg-[#f8fcfa] hover:border-[#40b594] hover:bg-[#f0faf6]"
+                      }`}
+                    >
+                      <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl transition-all ${cvDragging ? "bg-[#40b594] text-white" : "bg-[#e6f5f0] text-[#40b594]"}`}>
+                        <Upload size={28} />
+                      </div>
+                      <p className="text-sm font-extrabold text-[#17332b]">
+                        {cvDragging ? "Drop your CV here" : "Click to upload or drag & drop"}
+                      </p>
+                      <p className="text-xs text-[#7a8f89] mt-2">PDF, DOC, or DOCX</p>
+                      <p className="text-xs text-[#aec5be] mt-1">Maximum file size 10MB</p>
+                    </div>
+
+                    <button type="button" onClick={openCvPicker}
+                      className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-[#051612] px-5 py-3.5 text-sm font-bold text-white hover:bg-[#0d2a23] transition-all">
+                      <Upload size={16} /> Upload CV from Device
+                    </button>
+                  </>
+                )}
+              </section>
             </div>
           </div>
         </main>
@@ -676,11 +853,9 @@ export default function JobSeekerProfile() {
   );
 }
 
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-}: {
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function InfoRow({ icon: Icon, label, value }: {
   icon: React.ComponentType<{ size?: number }>;
   label: string;
   value: string;
@@ -698,33 +873,22 @@ function InfoRow({
   );
 }
 
-function EditableField({
-  editing,
-  label,
-  name,
-  value,
-  onChange,
-  className = "",
-}: {
+function EditableField({ editing, label, name, value, onChange, className = "" }: {
   editing: boolean;
   label: string;
   name: string;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+  onChange: (e: ChangeEvent) => void;
   className?: string;
 }) {
   return (
     <div className={className}>
       <p className="mb-2 text-sm font-bold text-[#27413a]">{label}</p>
       {editing ? (
-        <input
-          name={name}
-          value={value}
-          onChange={onChange}
-          className="w-full rounded-2xl border border-[#d9e8e2] bg-[#f6fbf8] px-4 py-3 text-sm"
-        />
+        <input name={name} value={value} onChange={onChange}
+          className="w-full rounded-2xl border border-[#d9e8e2] bg-[#f6fbf8] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#40b594]" />
       ) : (
-        <div className="rounded-2xl border border-[#edf3f0] bg-[#f9fcfb] px-4 py-3 text-sm font-semibold">
+        <div className="rounded-2xl border border-[#edf3f0] bg-[#f9fcfb] px-4 py-3 text-sm font-semibold text-[#10211d]">
           {value || "Not added"}
         </div>
       )}
@@ -732,40 +896,27 @@ function EditableField({
   );
 }
 
-function EditableSelect({
-  editing,
-  label,
-  name,
-  value,
-  onChange,
-  options,
-}: {
+function EditableSelect({ editing, label, name, value, onChange, options }: {
   editing: boolean;
   label: string;
   name: string;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+  onChange: (e: ChangeEvent) => void;
   options: string[];
 }) {
   return (
     <div>
       <p className="mb-2 text-sm font-bold text-[#27413a]">{label}</p>
       {editing ? (
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          className="w-full rounded-2xl border border-[#d9e8e2] bg-[#f6fbf8] px-4 py-3 text-sm"
-        >
+        <select name={name} value={value} onChange={onChange}
+          className="w-full rounded-2xl border border-[#d9e8e2] bg-[#f6fbf8] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#40b594]">
           <option value="">Select option</option>
           {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
+            <option key={option} value={option}>{option}</option>
           ))}
         </select>
       ) : (
-        <div className="rounded-2xl border border-[#edf3f0] bg-[#f9fcfb] px-4 py-3 text-sm font-semibold">
+        <div className="rounded-2xl border border-[#edf3f0] bg-[#f9fcfb] px-4 py-3 text-sm font-semibold text-[#10211d]">
           {value || "Not added"}
         </div>
       )}

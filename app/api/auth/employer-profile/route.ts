@@ -1,3 +1,5 @@
+// app/api/auth/employer-profile/route.ts
+
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -45,7 +47,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid profile data" }, { status: 400 });
     }
 
-    // Robust file check — handles both File and Blob instances
     let profileImageUrl: string | null = null;
     if (
       imageFile !== null &&
@@ -55,7 +56,6 @@ export async function POST(req: Request) {
       (imageFile as Blob).size > 0
     ) {
       try {
-        // Normalize to a File with a proper name if it came in as a plain Blob
         const blob = imageFile as Blob;
         const mimeType = blob.type || "image/jpeg";
         const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
@@ -82,7 +82,8 @@ export async function POST(req: Request) {
       try {
         const blob = companyFile as Blob;
         const name = companyFile instanceof File ? companyFile.name : "document.pdf";
-        const normalizedFile = companyFile instanceof File ? companyFile : new File([blob], name, { type: blob.type });
+        const normalizedFile =
+          companyFile instanceof File ? companyFile : new File([blob], name, { type: blob.type });
         companyFileUrl = await saveUpload(normalizedFile, "company-files");
         companyFileName = normalizedFile.name;
       } catch (e) {
@@ -121,8 +122,10 @@ export async function POST(req: Request) {
         .where(eq(employerProfiles.userId, me.id))
         .limit(1);
 
+      // ✅ FIXED: always return next so the frontend can redirect
       return NextResponse.json({
         success: true,
+        next: "/dashboard",
         profileImageUrl: updated.profileImage,
         companyFileUrl: updated.companyFileUrl,
         companyFileName: updated.companyFileName,
@@ -141,7 +144,8 @@ export async function POST(req: Request) {
 
     await db.insert(employerProfiles).values(insertData);
 
-    await db.update(users)
+    await db
+      .update(users)
       .set({ onboardingCompleted: true, updatedAt: new Date() })
       .where(eq(users.id, me.id));
 

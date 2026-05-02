@@ -31,12 +31,14 @@ export default function ImageCropModal({
   const [zoom, setZoom] = React.useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<Area | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [cropError, setCropError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
+    setCropError(null);
   }, [open, imageSrc]);
 
   const onCropComplete = React.useCallback((_: Area, croppedPixels: Area) => {
@@ -45,15 +47,18 @@ export default function ImageCropModal({
 
   const handleSave = async () => {
     if (!imageSrc || !croppedAreaPixels) return;
-
     try {
       setSaving(true);
+      setCropError(null);
       const croppedFile = await getCroppedImg(imageSrc, croppedAreaPixels, "profile.jpg");
+      console.log("Cropped file:", croppedFile.name, croppedFile.size, croppedFile instanceof File);
       const previewUrl = URL.createObjectURL(croppedFile);
       onSave(croppedFile, previewUrl);
     } catch (error) {
       console.error("CROP SAVE ERROR:", error);
-      alert("Failed to crop image");
+      setCropError(
+        error instanceof Error ? error.message : "Failed to crop image"
+      );
     } finally {
       setSaving(false);
     }
@@ -89,10 +94,14 @@ export default function ImageCropModal({
           />
         </div>
 
+        {cropError && (
+          <div className="mt-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium">
+            {cropError}
+          </div>
+        )}
+
         <div className="mt-5">
-          <label className="mb-2 block text-sm font-semibold text-gray-700">
-            Zoom
-          </label>
+          <label className="mb-2 block text-sm font-semibold text-gray-700">Zoom</label>
           <input
             type="range"
             min={1}
@@ -113,13 +122,9 @@ export default function ImageCropModal({
             <Upload size={16} />
             Upload Again
           </button>
-
           <button
             type="button"
-            onClick={() => {
-              onDelete();
-              onClose();
-            }}
+            onClick={() => { onDelete(); onClose(); }}
             disabled={!hasImage}
             className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           >

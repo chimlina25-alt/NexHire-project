@@ -167,16 +167,17 @@ export const interviews = pgTable("interviews", {
 });
 
 export const notifications = pgTable("notifications", {
- id: uuid("id").defaultRandom().primaryKey(),
- recipientId: uuid("recipient_id").notNull(),
- actorId: uuid("actor_id"),
- type: notificationTypeEnum("type").notNull().default("system"),
- title: text("title").notNull(),
- description: text("description").notNull(),
- link: text("link"),
- meta: jsonb("meta").$type<Record<string, unknown> | null>().default(null),
- readAt: timestamp("read_at", { withTimezone: true }),
- createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").defaultRandom().primaryKey(),
+  recipientId: uuid("recipient_id").notNull(),
+  actorId: uuid("actor_id"),
+  type: notificationTypeEnum("type").notNull().default("system"),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  link: text("link"),
+  meta: jsonb("meta").$type<Record<string, unknown> | null>().default(null),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }), // ✅ ADD THIS
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const conversations = pgTable("conversations", {
@@ -224,12 +225,13 @@ export const subscriptions = pgTable("subscriptions", {
 });
 
 export const adminConversations = pgTable("admin_conversations", {
- id: uuid("id").defaultRandom().primaryKey(),
- adminId: uuid("admin_id").notNull(),
- userId: uuid("user_id").notNull(),
- userRole: text("user_role").notNull(),
- createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
- lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
+  id: uuid("id").defaultRandom().primaryKey(),
+  adminId: uuid("admin_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  userRole: text("user_role").notNull(),
+  archived: boolean("archived").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const adminMessages = pgTable("admin_messages", {
@@ -240,4 +242,13 @@ export const adminMessages = pgTable("admin_messages", {
  text: text("text").notNull(),
  editedAt: timestamp("edited_at", { withTimezone: true }),
  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+export const broadcastLogs = pgTable("broadcast_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  adminId: uuid("admin_id").notNull(),
+  message: text("message").notNull(),
+  audience: text("audience").notNull(),
+  sentCount: integer("sent_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

@@ -19,6 +19,16 @@ const protectedJobSeekerRoutes = [
   '/job_seeker_setting',
 ];
 
+const protectedAdminRoutes = [
+  '/admin_dashboard',
+  '/manage_user',
+  '/admin_employer',
+  '/job_station',
+  '/admin_subscription',
+  '/broadcast',
+  '/admin_message',
+];
+
 const publicRoutes = [
   '/login',
   '/signup',
@@ -46,17 +56,47 @@ export async function middleware(request: NextRequest) {
   const isProtectedEmployerRoute = protectedEmployerRoutes.some(
     route => pathname === route || pathname.startsWith(route + '/')
   );
-
   const isProtectedJobSeekerRoute = protectedJobSeekerRoutes.some(
     route => pathname === route || pathname.startsWith(route + '/')
   );
+  const isProtectedAdminRoute = protectedAdminRoutes.some(
+    route => pathname === route || pathname.startsWith(route + '/')
+  );
 
-  if (!isProtectedEmployerRoute && !isProtectedJobSeekerRoute) {
+  if (!isProtectedEmployerRoute && !isProtectedJobSeekerRoute && !isProtectedAdminRoute) {
     return NextResponse.next();
   }
 
-  const sessionToken = request.cookies.get('session_token')?.value;
+  // ── Admin routes: check admin_session_token separately ──
+  if (isProtectedAdminRoute) {
+    const adminToken = request.cookies.get('admin_session_token')?.value;
+    if (!adminToken) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
 
+    try {
+      const baseUrl = request.nextUrl.origin;
+      const validateRes = await fetch(`${baseUrl}/api/admin/auth/me`, {
+        method: 'GET',
+        headers: {
+          cookie: `admin_session_token=${adminToken}`,
+        },
+        cache: 'no-store',
+      });
+
+      if (!validateRes.ok) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+
+      return NextResponse.next();
+    } catch (error) {
+      console.error('ADMIN MIDDLEWARE ERROR:', error);
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+  }
+
+  // ── Employer / Job seeker routes: check session_token ──
+  const sessionToken = request.cookies.get('session_token')?.value;
   if (!sessionToken) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('callbackUrl', pathname);
@@ -127,14 +167,19 @@ export const config = {
     '/job_seeker_notification/:path*',
     '/job_seeker_setting',
     '/job_seeker_setting/:path*',
+    '/admin_dashboard',
+    '/admin_dashboard/:path*',
+    '/manage_user',
+    '/manage_user/:path*',
+    '/admin_employer',
+    '/admin_employer/:path*',
+    '/job_station',
+    '/job_station/:path*',
+    '/admin_subscription',
+    '/admin_subscription/:path*',
+    '/broadcast',
+    '/broadcast/:path*',
+    '/admin_message',
+    '/admin_message/:path*',
   ],
 };
-const protectedAdminRoutes = [
-  '/admin_dashboard',
-  '/manage_user',
-  '/admin_employer',
-  '/job_station',
-  '/admin_subscription',
-  '/broadcast',
-  '/admin_message',
-];

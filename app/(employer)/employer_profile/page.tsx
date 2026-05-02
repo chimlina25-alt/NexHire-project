@@ -3,10 +3,10 @@
 import React from "react";
 import Link from "next/link";
 import {
-  Globe, MapPin, Users, Phone, Briefcase, CheckCircle2,
+  Globe, MapPin, Users, Phone, Briefcase, 
   Building2, Pencil, TrendingUp, Save, X, Camera,
   Trash2, FileText, Upload, ExternalLink, Shield,
-  Calendar, Tag, Mail,
+  Calendar, Mail, CheckCircle2,
 } from "lucide-react";
 import ImageCropModal from "@/components/ui/ImageCropModal";
 import EmployerNavProfile from "@/components/ui/EmployerNavProfile";
@@ -27,12 +27,25 @@ type EmployerForm = {
   profileImageUrl: string;
 };
 
-/* ─── helpers ─────────────────────────────────────────────────────────────── */
+type StatsData = {
+  activeJobs: number;
+  totalHires: number;
+  growthPct: number;
+  openPositions: {
+    id: string;
+    title: string;
+    employmentType: string;
+    salaryMin: number | null;
+    salaryMax: number | null;
+    category: string;
+    arrangement: string;
+    applicantCount: number;
+  }[];
+};
 
 const card =
   "rounded-2xl border border-[#e8f0ec] bg-white shadow-[0_4px_24px_rgba(7,28,22,0.07)]";
 
-/** Build a FormData from the current saved profile fields (for partial saves) */
 function buildBaseFormData(saved: EmployerForm): FormData {
   const fd = new FormData();
   fd.append("companyName", saved.companyName || "Untitled");
@@ -47,7 +60,19 @@ function buildBaseFormData(saved: EmployerForm): FormData {
   return fd;
 }
 
-/* ─── page ────────────────────────────────────────────────────────────────── */
+const getFileViewUrl = (url: string) =>
+  `/api/cv?url=${encodeURIComponent(url)}`;
+
+function formatSalary(min: number | null, max: number | null): string {
+  if (!min && !max) return "Salary not set";
+  if (min && max) return `$${min.toLocaleString()}–$${max.toLocaleString()}`;
+  if (min) return `From $${min.toLocaleString()}`;
+  return `Up to $${max!.toLocaleString()}`;
+}
+
+function formatEmploymentType(type: string): string {
+  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function EmployerProfile() {
   const { refresh } = useEmployerProfile();
@@ -66,6 +91,13 @@ export default function EmployerProfile() {
   const [cropOpen, setCropOpen] = React.useState(false);
   const [companyFile, setCompanyFile] = React.useState<File | null>(null);
 
+const [stats, setStats] = React.useState<StatsData>({
+  activeJobs: 0,
+  totalHires: 0,
+  growthPct: 0,
+  openPositions: [],
+});
+
   const empty: EmployerForm = {
     companyDescription: "", companyName: "", industry: "", companySize: "",
     currentAddress: "", foundedYear: "", country: "", contact: "",
@@ -75,7 +107,7 @@ export default function EmployerProfile() {
   const [saved, setSaved] = React.useState<EmployerForm>(empty);
   const [draft, setDraft] = React.useState<EmployerForm>(empty);
 
-  /* load */
+  // Load profile
   React.useEffect(() => {
     fetch("/api/employer/profile").then(async (res) => {
       if (!res.ok) return;
@@ -99,7 +131,15 @@ export default function EmployerProfile() {
     });
   }, []);
 
-  /* cleanup blob URLs */
+  // Load real stats
+  React.useEffect(() => {
+  fetch("/api/employer/profile-stats").then(async (res) => {
+    if (!res.ok) return;
+    const data = await res.json();
+    setStats(data);
+  });
+}, []);
+
   React.useEffect(() => {
     return () => {
       if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
@@ -107,47 +147,98 @@ export default function EmployerProfile() {
     };
   }, [sourceImageUrl, croppedPreviewUrl]);
 
-  /* ── image handlers ─────────────────────────────────────────────────────── */
-  const openFilePicker = () => fileInputRef.current?.click();
+  // ── Profile image ──────────────────────────────────────────────────────────
 
-  const handleCircleAction = () => {
-    if (sourceImageUrl || saved.profileImageUrl) { setCropOpen(true); return; }
-    openFilePicker();
+  const openFilePicker = () => setTimeout(() => fileInputRef.current?.click(), 0);
+
+  const handleCameraClick = () => {
+    const hasImage = !!(croppedPreviewUrl || sourceImageUrl || saved.profileImageUrl);
+    if (hasImage) setCropOpen(true);
+    else openFilePicker();
   };
 
-  const handleDeleteImage = () => {
+  const handleDeleteImage = async () => {
     if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-    setSourceImageUrl(null); setCroppedPreviewUrl(null); setProfileImage(null);
+    setSourceImageUrl(null);
+    setCroppedPreviewUrl(null);
+    setProfileImage(null);
     setCropOpen(false);
     setSaved((p) => ({ ...p, profileImageUrl: "" }));
     setDraft((p) => ({ ...p, profileImageUrl: "" }));
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!isEditing) {
+      const fd = buildBaseFormData(saved);
+      fd.append("removeProfileImage", "1");
+      await fetch("/api/auth/employer-profile", { method: "POST", body: fd });
+      refresh();
+    }
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("Only JPG, PNG, and WEBP images are allowed"); e.target.value = ""; return;
+      alert("Only JPG, PNG, and WEBP images are allowed");
+      e.target.value = "";
+      return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image must be 5MB or smaller"); e.target.value = ""; return;
+      alert("Image must be 5MB or smaller");
+      e.target.value = "";
+      return;
     }
     if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
     setSourceImageUrl(URL.createObjectURL(file));
-    setCroppedPreviewUrl(null); setProfileImage(null);
-    setCropOpen(true); e.target.value = "";
+    setCroppedPreviewUrl(null);
+    setProfileImage(null);
+    setCropOpen(true);
+    e.target.value = "";
   };
 
-  const handleCropSave = (file: File, previewUrl: string) => {
+  const handleCropSave = async (file: File, previewUrl: string) => {
     if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-    setProfileImage(file); setCroppedPreviewUrl(previewUrl); setCropOpen(false);
+    setCropOpen(false);
+    if (!isEditing) {
+      setCroppedPreviewUrl(previewUrl);
+      await autoSaveProfileImage(file, previewUrl);
+    } else {
+      setProfileImage(file);
+      setCroppedPreviewUrl(previewUrl);
+    }
   };
 
-  /* ── company file handlers ──────────────────────────────────────────────── */
-  const openCompanyFilePicker = () => companyFileInputRef.current?.click();
+  const autoSaveProfileImage = async (file: File, previewUrl: string) => {
+    try {
+      setLoading(true);
+      const fd = buildBaseFormData(saved);
+      fd.append("profileImage", file, file.name);
+      const res = await fetch("/api/auth/employer-profile", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        const newUrl = data.profileImageUrl || data.profileImage || previewUrl;
+        setSaved((p) => ({ ...p, profileImageUrl: newUrl }));
+        setDraft((p) => ({ ...p, profileImageUrl: newUrl }));
+        URL.revokeObjectURL(previewUrl);
+        setCroppedPreviewUrl(null);
+        setSourceImageUrl(null);
+        setProfileImage(null);
+        refresh();
+      } else {
+        alert(data.error || "Failed to upload photo");
+      }
+    } catch {
+      alert("Something went wrong uploading photo");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Company file ───────────────────────────────────────────────────────────
+
+  const openCompanyFilePicker = () =>
+    setTimeout(() => companyFileInputRef.current?.click(), 0);
 
   const handleCompanyFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -157,15 +248,18 @@ export default function EmployerProfile() {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     if (!allowed.includes(file.type)) {
-      alert("Only PDF, DOC, and DOCX files are allowed"); e.target.value = ""; return;
+      alert("Only PDF, DOC, and DOCX files are allowed");
+      e.target.value = "";
+      return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      alert("File must be 10MB or smaller"); e.target.value = ""; return;
+      alert("File must be 10MB or smaller");
+      e.target.value = "";
+      return;
     }
     setCompanyFile(file);
     setDraft((p) => ({ ...p, companyFileName: file.name }));
     e.target.value = "";
-
     if (!isEditing) {
       await uploadCompanyFileNow(file);
     }
@@ -176,27 +270,24 @@ export default function EmployerProfile() {
       setFileUploading(true);
       const fd = buildBaseFormData(saved);
       fd.append("companyFile", file);
-
       const res = await fetch("/api/auth/employer-profile", { method: "POST", body: fd });
       const result = res.ok ? await res.json() : null;
-
       if (!res.ok || !result) {
         alert("Failed to upload file");
         setCompanyFile(null);
         setDraft((p) => ({ ...p, companyFileName: saved.companyFileName }));
         return;
       }
-
       const updated: EmployerForm = {
         ...saved,
         companyFileUrl: result.companyFileUrl || saved.companyFileUrl,
         companyFileName: result.companyFileName || file.name,
       };
-      setSaved(updated); setDraft(updated);
+      setSaved(updated);
+      setDraft(updated);
       setCompanyFile(null);
       refresh();
-    } catch (err) {
-      console.error("UPLOAD ERROR:", err);
+    } catch {
       alert("Something went wrong uploading the file");
       setCompanyFile(null);
       setDraft((p) => ({ ...p, companyFileName: saved.companyFileName }));
@@ -205,37 +296,27 @@ export default function EmployerProfile() {
     }
   };
 
-  /* ── KEY FIX: capture saved snapshot before any setState calls ────────── */
   const handleRemoveCompanyFile = async () => {
-    // Snapshot BEFORE any setState — this is what was failing before
     const snapshot = { ...saved };
-
-    // Update UI immediately
     setCompanyFile(null);
     setDraft((p) => ({ ...p, companyFileName: "", companyFileUrl: "" }));
     if (companyFileInputRef.current) companyFileInputRef.current.value = "";
-
-    // If not editing, persist removal now using the snapshot
     if (!isEditing) {
       try {
         setFileUploading(true);
-        const fd = buildBaseFormData(snapshot); // ← snapshot, not saved
+        const fd = buildBaseFormData(snapshot);
         fd.append("removeCompanyFile", "true");
-
         const res = await fetch("/api/auth/employer-profile", { method: "POST", body: fd });
         if (res.ok) {
           setSaved((p) => ({ ...p, companyFileName: "", companyFileUrl: "" }));
           refresh();
         } else {
           const result = await res.json().catch(() => ({}));
-          console.error("Remove file failed:", result.error);
-          // Revert on failure
           setSaved(snapshot);
           setDraft(snapshot);
           alert(result.error || "Failed to remove file");
         }
-      } catch (err) {
-        console.error("REMOVE FILE ERROR:", err);
+      } catch {
         setSaved(snapshot);
         setDraft(snapshot);
         alert("Something went wrong");
@@ -243,10 +324,10 @@ export default function EmployerProfile() {
         setFileUploading(false);
       }
     }
-    // If editing → removal sent on Save Changes via removeCompanyFile flag
   };
 
-  /* ── profile edit handlers ──────────────────────────────────────────────── */
+  // ── Edit / Save ────────────────────────────────────────────────────────────
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => setDraft((p) => ({ ...p, [e.target.name]: e.target.value }));
@@ -272,38 +353,37 @@ export default function EmployerProfile() {
       if (!draft.companyFileName && !draft.companyFileUrl && saved.companyFileName) {
         fd.append("removeCompanyFile", "true");
       }
-
       const res = await fetch("/api/auth/employer-profile", { method: "POST", body: fd });
       const text = await res.text();
       const result = text ? JSON.parse(text) : {};
-
       if (!res.ok) { alert(result.error || "Failed to update profile"); return; }
-
       const updated: EmployerForm = {
         ...draft,
         companyFileUrl: result.companyFileUrl ?? draft.companyFileUrl,
         companyFileName: result.companyFileName ?? draft.companyFileName,
         profileImageUrl: result.profileImageUrl || draft.profileImageUrl || saved.profileImageUrl,
       };
-      setSaved(updated); setDraft(updated);
-
+      setSaved(updated);
+      setDraft(updated);
       if (profileImage && result.profileImageUrl) {
         if (sourceImageUrl) URL.revokeObjectURL(sourceImageUrl);
         if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl);
-        setSourceImageUrl(null); setCroppedPreviewUrl(null); setProfileImage(null);
+        setSourceImageUrl(null);
+        setCroppedPreviewUrl(null);
+        setProfileImage(null);
       }
       setCompanyFile(null);
       refresh();
       setIsEditing(false);
-    } catch (err) {
-      console.error("EMPLOYER UPDATE ERROR:", err);
+    } catch {
       alert("Something went wrong");
     } finally {
       setLoading(false);
     }
   };
 
-  /* ── derived ────────────────────────────────────────────────────────────── */
+  // ── Derived ────────────────────────────────────────────────────────────────
+
   const profile = isEditing ? draft : saved;
   const displayImageSrc = croppedPreviewUrl || sourceImageUrl || saved.profileImageUrl || "";
   const displayFileName = companyFile?.name || draft.companyFileName || saved.companyFileName || "";
@@ -320,44 +400,40 @@ export default function EmployerProfile() {
     (completionFields.filter(Boolean).length / completionFields.length) * 100
   );
 
-  const openJobs = [
-    { title: "Senior Software Engineer", type: "Full-time", salary: "$2,000–$3,500", dept: "Engineering" },
-    { title: "Product Designer", type: "Full-time", salary: "$1,500–$2,500", dept: "Design" },
-    { title: "Data Analyst", type: "Contract", salary: "$1,200–$2,000", dept: "Analytics" },
-  ];
-
-  /* ── render ─────────────────────────────────────────────────────────────── */
   return (
     <>
       <div className="min-h-screen bg-[#f0f5f2] font-sans text-[#10211d]">
 
-        {/* ── Nav ──────────────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-50 border-b border-white/10 bg-[#051612]/95 backdrop-blur-md">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
-            <div className="flex items-center gap-2.5">
-              <img src="/logo.png" alt="NexHire" className="h-7 w-7" />
-              <span className="text-lg font-black tracking-tight text-white">NexHire</span>
-            </div>
-            <nav className="hidden items-center gap-1 md:flex">
-              {[
-                { href: "/dashboard", label: "Dashboard" },
-                { href: "/post_job", label: "Post Job" },
-                { href: "/employer_message", label: "Messages" },
-                { href: "/employer_notification", label: "Notifications" },
-                { href: "/employer_setting", label: "Settings" },
-              ].map(({ href, label }) => (
-                <Link key={href} href={href}>
-                  <span className="rounded-lg px-3.5 py-2 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white">
-                    {label}
-                  </span>
-                </Link>
-              ))}
-            </nav>
-            <EmployerNavProfile />
-          </div>
-        </header>
+        {/* Nav */}
+        <header className="bg-[#051612] text-white px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-lg">
+  <div className="flex items-center gap-2.5">
+    <img src="/logo.png" alt="NexHire" className="w-8 h-8" />
+    <span className="text-xl font-extrabold tracking-tight">
+      NexHire
+    </span>
+  </div>
 
-        {/* ── Hero banner ──────────────────────────────────────────────────── */}
+  <nav className="hidden md:flex items-center gap-8 text-sm font-semibold">
+    {[
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/post_job", label: "Post Job" },
+      { href: "/employer_message", label: "Messages" },
+      { href: "/employer_notification", label: "Notifications" },
+      { href: "/subscription", label: "Subscription" },
+      { href: "/employer_setting", label: "Settings" },
+    ].map(({ href, label }) => (
+      <Link key={href} href={href}>
+        <button className="text-gray-300 hover:text-white transition-colors">
+          {label}
+        </button>
+      </Link>
+    ))}
+  </nav>
+
+  <EmployerNavProfile />
+</header>
+
+        {/* Hero */}
         <div className="relative overflow-hidden bg-[#051612]">
           <div className="absolute inset-0"
             style={{
@@ -367,7 +443,6 @@ export default function EmployerProfile() {
           />
           <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-[#40b594]/20 blur-[80px]" />
           <div className="absolute -right-32 bottom-0 h-64 w-64 rounded-full bg-[#40b594]/10 blur-[60px]" />
-
           <div className="relative mx-auto max-w-7xl px-6 py-10">
             <div className="flex items-end justify-between">
               <div>
@@ -406,34 +481,42 @@ export default function EmployerProfile() {
 
         <main className="mx-auto max-w-7xl px-6 py-8">
 
-          {/* ── Profile card ───────────────────────────────────────────────── */}
+          {/* Profile card */}
           <div className={`${card} mb-6 overflow-hidden`}>
             <div className="h-1.5 w-full bg-gradient-to-r from-[#40b594] via-[#2d9a7c] to-[#051612]" />
             <div className="p-6 md:p-8">
               <div className="flex flex-col gap-6 md:flex-row md:items-start">
-                {/* avatar */}
+
+                {/* Avatar */}
                 <div className="relative mx-auto flex-shrink-0 md:mx-0">
                   <div className="h-28 w-28 overflow-hidden rounded-2xl border-4 border-[#e8f0ec] bg-gradient-to-br from-[#21483d] to-[#40b594] shadow-lg md:h-32 md:w-32">
                     {displayImageSrc
                       ? <img src={displayImageSrc} alt="Company" className="h-full w-full object-cover" />
-                      : <div className="flex h-full w-full items-center justify-center"><Building2 className="h-12 w-12 text-white/70" /></div>
+                      : <div className="flex h-full w-full items-center justify-center">
+                          <Building2 className="h-12 w-12 text-white/70" />
+                        </div>
                     }
                   </div>
-                  <button onClick={handleCircleAction}
-                    className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-2 border-white bg-[#40b594] text-white shadow-md transition hover:bg-[#35a082]">
+                  <button onClick={handleCameraClick} aria-label="Change photo"
+                    className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-2 border-white bg-[#40b594] text-white shadow-md transition hover:bg-[#35a082] cursor-pointer">
                     {displayImageSrc ? <Pencil size={14} /> : <Camera size={15} />}
                   </button>
-                  {displayImageSrc && isEditing && (
-                    <button onClick={handleDeleteImage}
+                  {displayImageSrc && (
+                    <button onClick={handleDeleteImage} aria-label="Remove photo"
                       className="absolute -left-2 -top-2 flex h-8 w-8 items-center justify-center rounded-xl border-2 border-white bg-white text-red-500 shadow-md transition hover:bg-red-50">
                       <Trash2 size={13} />
                     </button>
+                  )}
+                  {!displayImageSrc && (
+                    <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <span className="text-[10px] font-semibold text-[#40b594]">Click to upload</span>
+                    </div>
                   )}
                   <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp"
                     onChange={handleImageChange} className="hidden" />
                 </div>
 
-                {/* info */}
+                {/* Info */}
                 <div className="flex-1 text-center md:text-left">
                   <div className="flex flex-col items-center gap-2 md:flex-row md:items-center">
                     <h2 className="text-2xl font-black text-[#071a15]">
@@ -476,7 +559,7 @@ export default function EmployerProfile() {
                   </div>
                 </div>
 
-                {/* mobile edit */}
+                {/* Mobile edit */}
                 <div className="flex justify-center gap-2 md:hidden">
                   {isEditing ? (
                     <>
@@ -500,27 +583,35 @@ export default function EmployerProfile() {
             </div>
           </div>
 
-          {/* ── Stats ──────────────────────────────────────────────────────── */}
+          {/* Real Stats */}
           <div className="mb-6 grid grid-cols-3 gap-4">
-            {[
-              { label: "Active Jobs", value: "12", icon: Briefcase, color: "text-[#2563eb]", bg: "bg-[#eff4ff]" },
-              { label: "Total Hires", value: "148", icon: Users, color: "text-[#7c3aed]", bg: "bg-[#f5f3ff]" },
-              { label: "Growth", value: "+26%", icon: TrendingUp, color: "text-[#40b594]", bg: "bg-[#eafaf4]" },
-            ].map(({ label, value, icon: Icon, color, bg }) => (
-              <div key={label} className={`${card} p-5`}>
-                <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${bg} ${color}`}>
-                  <Icon size={18} />
-                </div>
-                <p className="text-2xl font-black text-[#071a15]">{value}</p>
-                <p className="mt-0.5 text-xs font-semibold text-[#7a9188]">{label}</p>
+            <div className={`${card} p-5`}>
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#eff4ff] text-[#2563eb]">
+                <Briefcase size={18} />
               </div>
-            ))}
+              <p className="text-2xl font-black text-[#071a15]">{stats.activeJobs}</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#7a9188]">Active Jobs</p>
+            </div>
+            <div className={`${card} p-5`}>
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f5f3ff] text-[#7c3aed]">
+                <Users size={18} />
+              </div>
+              <p className="text-2xl font-black text-[#071a15]">{stats.totalHires}</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#7a9188]">Total Hires</p>
+            </div>
+            <div className={`${card} p-5`}>
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#eafaf4] text-[#40b594]">
+                <TrendingUp size={18} />
+              </div>
+              <p className="text-2xl font-black text-[#071a15]">{stats.growthPct}%</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#7a9188]">Hire Rate</p>
+            </div>
           </div>
 
-          {/* ── Main grid ──────────────────────────────────────────────────── */}
+          {/* Main grid */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
 
-            {/* ── Sidebar ──────────────────────────────────────────────────── */}
+            {/* Sidebar */}
             <aside className="space-y-5">
 
               {/* Profile strength */}
@@ -532,10 +623,8 @@ export default function EmployerProfile() {
                   <span className="text-lg font-black text-[#071a15]">{completion}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-[#e5eeea]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#40b594] to-[#2d9a7c] transition-all duration-500"
-                    style={{ width: `${completion}%` }}
-                  />
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#40b594] to-[#2d9a7c] transition-all duration-500"
+                    style={{ width: `${completion}%` }} />
                 </div>
                 <p className="mt-2 text-xs text-[#7a9188]">
                   {completion === 100 ? "Profile complete 🎉" : "Fill in all fields to boost visibility"}
@@ -556,7 +645,7 @@ export default function EmployerProfile() {
                 </div>
               </div>
 
-              {/* Company file sidebar preview */}
+              {/* Company file sidebar */}
               <div className={`${card} p-5`}>
                 <div className="mb-4 flex items-center gap-2.5">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eafaf4] text-[#40b594]">
@@ -569,7 +658,7 @@ export default function EmployerProfile() {
                 </div>
                 {hasSavedFile ? (
                   <div className="rounded-xl border border-[#d5eae3] bg-[#f4fbf7] p-3">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 mb-2">
                       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#40b594]/10">
                         <FileText size={14} className="text-[#40b594]" />
                       </div>
@@ -577,18 +666,28 @@ export default function EmployerProfile() {
                         {saved.companyFileName}
                       </p>
                     </div>
-                    <a href={saved.companyFileUrl} target="_blank" rel="noreferrer"
-                      className="mt-2.5 flex items-center gap-1.5 text-xs font-bold text-[#0a7e61] hover:underline">
+                    <a
+                      href={getFileViewUrl(saved.companyFileUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-bold text-[#0a7e61] hover:underline"
+                    >
                       <ExternalLink size={11} /> View file
                     </a>
                   </div>
                 ) : (
-                  <p className="text-xs text-[#9aafa8]">No file uploaded yet</p>
+                  <div className="rounded-xl border border-dashed border-[#cfe8de] bg-[#f8fcfa] p-3 text-center">
+                    <p className="text-xs text-[#9aafa8]">No file uploaded yet</p>
+                    <button onClick={openCompanyFilePicker}
+                      className="mt-2 text-xs font-bold text-[#40b594] hover:underline">
+                      Upload now
+                    </button>
+                  </div>
                 )}
               </div>
             </aside>
 
-            {/* ── Main panel ───────────────────────────────────────────────── */}
+            {/* Main panel */}
             <div className="space-y-5">
 
               {/* Tabs */}
@@ -618,41 +717,64 @@ export default function EmployerProfile() {
                         className="h-36 w-full resize-none rounded-xl border border-[#cfe8de] bg-[#f6fbf8] px-4 py-3 text-sm text-[#17332b] outline-none transition focus:border-[#40b594] focus:ring-2 focus:ring-[#40b594]/15" />
                     ) : (
                       <p className="text-sm leading-7 text-[#4d6860]">
-                        {saved.companyDescription || <span className="italic text-[#9aafa8]">No description added yet.</span>}
+                        {saved.companyDescription || (
+                          <span className="italic text-[#9aafa8]">No description added yet.</span>
+                        )}
                       </p>
                     )}
                   </div>
 
-                  {/* Open positions */}
+                  {/* Real Open Positions */}
                   <div className={`${card} p-6`}>
                     <div className="mb-4 flex items-center justify-between">
                       <h3 className="text-base font-black text-[#071a15]">Open Positions</h3>
                       <span className="rounded-full bg-[#eafaf4] px-2.5 py-0.5 text-xs font-bold text-[#1a7a5c]">
-                        {openJobs.length} active
+                        {stats.openPositions.length} active
                       </span>
                     </div>
-                    <div className="space-y-3">
-                      {openJobs.map((job) => (
-                        <div key={job.title}
-                          className="flex items-center justify-between rounded-xl border border-[#e8f0ec] bg-[#f8fbf9] px-4 py-3.5 transition hover:border-[#c5ddd4] hover:bg-[#f0f8f4]">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-sm">
-                              <Briefcase size={15} className="text-[#40b594]" />
+
+                    {stats.openPositions.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-[#e8f0ec] bg-[#f8fbf9] py-10 text-center">
+                        <Briefcase size={28} className="mx-auto mb-3 text-[#c5ddd4]" />
+                        <p className="text-sm font-semibold text-[#7a9188]">No active jobs yet</p>
+                        <Link href="/post_job">
+                          <span className="mt-2 inline-block text-xs font-bold text-[#40b594] hover:underline cursor-pointer">
+                            Post your first job →
+                          </span>
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {stats.openPositions.map((job) => (
+                          <div key={job.id}
+                            className="flex items-center justify-between rounded-xl border border-[#e8f0ec] bg-[#f8fbf9] px-4 py-3.5 transition hover:border-[#c5ddd4] hover:bg-[#f0f8f4]">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
+                                <Briefcase size={15} className="text-[#40b594]" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-[#071a15] truncate">{job.title}</p>
+                                <p className="mt-0.5 text-xs text-[#6a8880]">
+                                  <span className="font-semibold text-[#40b594]">
+                                    {formatSalary(job.salaryMin, job.salaryMax)}
+                                  </span>
+                                  {" · "}{formatEmploymentType(job.employmentType)}
+                                  {" · "}{job.applicantCount} applicant{job.applicantCount !== 1 ? "s" : ""}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-bold text-[#071a15]">{job.title}</p>
-                              <p className="mt-0.5 text-xs text-[#6a8880]">
-                                <span className="font-semibold text-[#40b594]">{job.salary}</span>
-                                {" · "}{job.type}{" · "}{job.dept}
-                              </p>
+                            <div className="flex items-center gap-2 shrink-0 ml-3">
+                              <span className="rounded-lg bg-[#eafaf4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#1a7a5c]">
+                                Active
+                              </span>
+                              <Link href={`/jobs/${job.id}`}>
+                                <ExternalLink size={14} className="text-[#7a9188] hover:text-[#40b594] transition" />
+                              </Link>
                             </div>
                           </div>
-                          <span className="rounded-lg bg-[#eafaf4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#1a7a5c]">
-                            Active
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
@@ -679,9 +801,8 @@ export default function EmployerProfile() {
                 </div>
               )}
 
-              {/* ── Upload Company File ─────────────────────────────────────── */}
+              {/* Company Document — always interactive */}
               <div className={`${card} overflow-hidden`}>
-                {/* header */}
                 <div className="flex items-center justify-between border-b border-[#e8f0ec] px-6 py-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eafaf4] text-[#40b594]">
@@ -699,18 +820,15 @@ export default function EmployerProfile() {
                     </span>
                   ) : hasSavedFile ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eafaf4] px-3 py-1 text-xs font-bold text-[#1a7a5c]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#40b594]" />
-                      Uploaded
+                      <CheckCircle2 size={11} /> Uploaded
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f5f5f5] px-3 py-1 text-xs font-bold text-[#8a9e98]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#b0c4bc]" />
                       No file
                     </span>
                   )}
                 </div>
 
-                {/* body */}
                 <div className="p-6">
                   {hasFile ? (
                     <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#d5eae3] bg-[#f4fbf7] px-4 py-3">
@@ -720,7 +838,7 @@ export default function EmployerProfile() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-[#1a4035]">{displayFileName}</p>
                         <p className="text-xs text-[#7a9188]">
-                          {fileUploading ? "Uploading to server…" : "Ready"}
+                          {fileUploading ? "Uploading to server…" : companyFile ? "Ready to upload" : "On file"}
                         </p>
                       </div>
                       {!fileUploading && (
@@ -731,11 +849,12 @@ export default function EmployerProfile() {
                       )}
                     </div>
                   ) : (
-                    <div className="mb-4 flex items-center justify-center rounded-xl border-2 border-dashed border-[#cfe8de] bg-[#f8fcfa] py-8">
+                    <div onClick={openCompanyFilePicker}
+                      className="mb-4 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#cfe8de] bg-[#f8fcfa] py-10 transition hover:border-[#40b594] hover:bg-[#f0faf6]">
                       <div className="text-center">
-                        <Upload size={24} className="mx-auto mb-2 text-[#a0c4b8]" />
-                        <p className="text-sm font-semibold text-[#7a9188]">No document uploaded</p>
-                        <p className="mt-0.5 text-xs text-[#a0b8b0]">Click Upload to add your company brochure</p>
+                        <Upload size={26} className="mx-auto mb-2 text-[#a0c4b8]" />
+                        <p className="text-sm font-bold text-[#5a736c]">Click to upload document</p>
+                        <p className="mt-1 text-xs text-[#a0b8b0]">PDF, DOC, or DOCX · Max 10MB</p>
                       </div>
                     </div>
                   )}
@@ -748,8 +867,12 @@ export default function EmployerProfile() {
                     </button>
 
                     {hasSavedFile && !fileUploading && (
-                      <a href={saved.companyFileUrl} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-2 rounded-xl border border-[#c5ddd4] bg-white px-4 py-2.5 text-sm font-bold text-[#0a7e61] transition hover:bg-[#f0f8f4]">
+                      <a
+                        href={getFileViewUrl(saved.companyFileUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 rounded-xl border border-[#c5ddd4] bg-white px-4 py-2.5 text-sm font-bold text-[#0a7e61] transition hover:bg-[#f0f8f4]"
+                      >
                         <ExternalLink size={15} /> View File
                       </a>
                     )}
@@ -762,12 +885,12 @@ export default function EmployerProfile() {
                     )}
                   </div>
 
+                  {/* Always in DOM */}
                   <input ref={companyFileInputRef} type="file"
                     accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={handleCompanyFileChange} className="hidden" />
                 </div>
               </div>
-
             </div>
           </div>
         </main>
@@ -787,7 +910,7 @@ export default function EmployerProfile() {
   );
 }
 
-/* ─── sub-components ─────────────────────────────────────────────────────── */
+// Sub-components
 
 function ContactRow({
   icon: Icon, label, value, href,

@@ -1,30 +1,39 @@
-import { getCurrentUser } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { createHash } from "crypto";
+import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/app/db";
-import { employerProfiles, jobSeekerProfiles } from "@/app/db/schema";
-import { eq } from "drizzle-orm";
+import { sessions, users } from "@/app/db/schema";
 
-export async function getCurrentEmployerWithProfile() {
-  const user = await getCurrentUser("auth");
-  if (!user || user.role !== "employer") return null;
+export async function getCurrentUser() {
+  try {
+    const cookieStore = await cookies();
+    const rawToken = cookieStore.get("session_token")?.value;
+    if (!rawToken) return null;
 
-  const [profile] = await db
-    .select()
-    .from(employerProfiles)
-    .where(eq(employerProfiles.userId, user.id))
-    .limit(1);
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
 
-  return { user, profile: profile ?? null };
-}
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.tokenHash, tokenHash),
+          gt(sessions.expiresAt, new Date())
+        )
+      )
+      .limit(1);
 
-export async function getCurrentJobSeekerWithProfile() {
-  const user = await getCurrentUser("auth");
-  if (!user || user.role !== "job_seeker") return null;
+    if (!session) return null;
 
-  const [profile] = await db
-    .select()
-    .from(jobSeekerProfiles)
-    .where(eq(jobSeekerProfiles.userId, user.id))
-    .limit(1);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
 
-  return { user, profile: profile ?? null };
+    return user ?? null;
+  } catch (error) {
+    console.error("getCurrentUser error:", error);
+    return null;
+  }
 }

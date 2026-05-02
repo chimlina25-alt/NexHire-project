@@ -319,25 +319,30 @@ const PostJob = () => {
   };
 
   const loadDrafts = async () => {
-    try {
-      setDraftLoading(true);
-      const res = await fetch("/api/jobs?mine=1", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) return;
-      const drafts = (data || [])
-        .filter((job: { status: string }) => job.status === "draft")
-        .map((job: { id: string; title: string; category: string; postedAt: string; createdAt: string }) => ({
-          id: job.id, title: job.title, category: job.category,
-          lastSaved: new Date(job.postedAt ?? job.createdAt).toLocaleString(),
-        }));
-      setDraftData(drafts);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDraftLoading(false);
-    }
-  };
+  try {
+    setDraftLoading(true);
+    const res = await fetch("/api/jobs?mine=1", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) return;
 
+    const allJobs = Array.isArray(data) ? data : (data.jobs ?? []);
+
+    const drafts = allJobs
+      .filter((job: { status: string }) => job.status === "draft")
+      .map((job: { id: string; title: string; category: string; postedAt: string; createdAt: string }) => ({
+        id: job.id,
+        title: job.title,
+        category: job.category,
+        lastSaved: new Date(job.postedAt ?? job.createdAt).toLocaleString(),
+      }));
+
+    setDraftData(drafts);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setDraftLoading(false);
+  }
+};
   const handleViewDraft = async (jobId: string) => {
     try {
       setDraftFetchLoading(true);

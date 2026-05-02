@@ -1,174 +1,201 @@
 import { NextResponse } from "next/server";
-import { eq, and, desc, ilike, or } from "drizzle-orm";
-import { z } from "zod";
+import { eq, desc } from "drizzle-orm";
 import { db } from "@/app/db";
-import { jobs, employerProfiles } from "@/app/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { jobs, employerProfiles, sessions, users } from "@/app/db/schema";
+import { createHash } from "crypto";
+import { cookies } from "next/headers";
+import { and, gt } from "drizzle-orm";
 
-const createSchema = z.object({
-  title: z.string().min(1),
-  category: z.string().min(1),
-  location: z.string().min(1),
-  arrangement: z.enum(["on_site", "remote", "hybrid"]).default("on_site"),
-  employmentType: z
-    .enum(["full_time", "part_time", "contract", "freelance", "internship"])
-    .default("full_time"),
-  experienceLevel: z
-    .enum(["entry", "mid", "senior", "lead", "executive"])
-    .default("entry"),
-  salaryMin: z.number().nullable().optional(),
-  salaryMax: z.number().nullable().optional(),
-  applicationDeadline: z.string().nullable().optional(),
-  description: z.string().min(1),
-  requirements: z.string().optional(),
-  applicationPlatform: z.string().default("internal"),
-  externalApplyLink: z.string().nullable().optional(),
-  contactEmail: z.string().nullable().optional(),
-  status: z.enum(["draft", "active", "closed"]).default("draft"),
-});
+async function getEmployerIdFromRequest(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+    const rawToken = cookieStore.get("session_token")?.value;
+    if (!rawToken) return null;
+
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())))
+      .limit(1);
+
+    if (!session) return null;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+
+    if (!user) return null;
+
+    return user.id;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(req: Request) {
-  const user = await getCurrentUser("auth");
-  const { searchParams } = new URL(req.url);
-  const mine = searchParams.get("mine");
-  const status = searchParams.get("status");
-  const search = searchParams.get("search") || "";
-  const type = searchParams.get("type") || "";
-  const arrangement = searchParams.get("arrangement") || "";
-  const experience = searchParams.get("experience") || "";
+  try {
+    const { searchParams } = new URL(req.url);
+    const mine = searchParams.get("mine");
 
-  // Employer fetching their own jobs
-  if (mine && user?.role === "employer") {
-    const conditions: any[] = [eq(jobs.employerId, user.id)];
-    if (status) conditions.push(eq(jobs.status, status as any));
+    // ── Employer: fetch their own jobs (all statuses including drafts) ──
+    if (mine === "1") {
+      const userId = await getEmployerIdFromRequest();
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
 
-    const result = await db
-      .select()
+      const myJobs = await db
+        .select()
+        .from(jobs)
+        .where(eq(jobs.employerId, userId))
+        .orderBy(desc(jobs.createdAt));
+
+      return NextResponse.json({ jobs: myJobs, total: myJobs.length });
+    }
+
+    // ── Public: fetch active jobs with filters ──
+    const category = searchParams.get("category") || "";
+    const arrangement = searchParams.get("arrangement") || "";
+    const employmentType = searchParams.get("employmentType") || "";
+    const search = searchParams.get("search") || "";
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+    const offset = (page - 1) * limit;
+
+    let allJobs = await db
+      .select({
+        id: jobs.id,
+        title: jobs.title,
+        category: jobs.category,
+        location: jobs.location,
+        arrangement: jobs.arrangement,
+        employmentType: jobs.employmentType,
+        experienceLevel: jobs.experienceLevel,
+        salaryMin: jobs.salaryMin,
+        salaryMax: jobs.salaryMax,
+        description: jobs.description,
+        requirements: jobs.requirements,
+        applicationDeadline: jobs.applicationDeadline,
+        applicationPlatform: jobs.applicationPlatform,
+        externalApplyLink: jobs.externalApplyLink,
+        contactEmail: jobs.contactEmail,
+        status: jobs.status,
+        postedAt: jobs.postedAt,
+        createdAt: jobs.createdAt,
+        employerId: jobs.employerId,
+        companyName: employerProfiles.companyName,
+        industry: employerProfiles.industry,
+        companySize: employerProfiles.companySize,
+        currentAddress: employerProfiles.currentAddress,
+        profileImage: employerProfiles.profileImage,
+        websiteLink: employerProfiles.websiteLink,
+      })
       .from(jobs)
-      .where(and(...conditions))
-      .orderBy(desc(jobs.createdAt));
+      .leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
+      .where(eq(jobs.status, "active"))
+      .orderBy(desc(jobs.postedAt));
 
-    return NextResponse.json(result);
-  }
+    if (category) {
+      allJobs = allJobs.filter((j) => j.category === category);
+    }
+    if (arrangement) {
+      allJobs = allJobs.filter((j) => j.arrangement === arrangement);
+    }
+    if (employmentType) {
+      allJobs = allJobs.filter((j) => j.employmentType === employmentType);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      allJobs = allJobs.filter(
+        (j) =>
+          j.title.toLowerCase().includes(q) ||
+          (j.companyName || "").toLowerCase().includes(q) ||
+          j.category.toLowerCase().includes(q) ||
+          j.location.toLowerCase().includes(q)
+      );
+    }
 
-  // Public job listing for job seekers
-  const conditions: any[] = [eq(jobs.status, "active")];
+    const total = allJobs.length;
+    const paginated = allJobs.slice(offset, offset + limit);
 
-  if (search) {
-    conditions.push(
-      or(
-        ilike(jobs.title, `%${search}%`),
-        ilike(jobs.category, `%${search}%`),
-        ilike(jobs.location, `%${search}%`),
-        ilike(jobs.description, `%${search}%`)
-      )
+    return NextResponse.json({ jobs: paginated, total, page, limit });
+  } catch (error) {
+    console.error("JOBS GET ERROR:", error);
+    return NextResponse.json(
+      { error: "Internal server error: " + String(error) },
+      { status: 500 }
     );
   }
-
-  // Map display labels back to DB enums
-  const typeMap: Record<string, string> = {
-    "Full-time": "full_time",
-    "Part-time": "part_time",
-    Contract: "contract",
-    Freelance: "freelance",
-    Internship: "internship",
-  };
-  const arrangementMap: Record<string, string> = {
-    "On-site": "on_site",
-    Remote: "remote",
-    Hybrid: "hybrid",
-  };
-  const experienceMap: Record<string, string> = {
-    "Entry Level": "entry",
-    "Mid Level": "mid",
-    Senior: "senior",
-    "Lead / Manager": "lead",
-    Executive: "executive",
-  };
-
-  if (type && typeMap[type]) {
-    conditions.push(eq(jobs.employmentType, typeMap[type] as any));
-  }
-  if (arrangement && arrangementMap[arrangement]) {
-    conditions.push(eq(jobs.arrangement, arrangementMap[arrangement] as any));
-  }
-  if (experience && experienceMap[experience]) {
-    conditions.push(eq(jobs.experienceLevel, experienceMap[experience] as any));
-  }
-
-  const result = await db
-    .select({
-      id: jobs.id,
-      title: jobs.title,
-      category: jobs.category,
-      location: jobs.location,
-      arrangement: jobs.arrangement,
-      employmentType: jobs.employmentType,
-      experienceLevel: jobs.experienceLevel,
-      salaryMin: jobs.salaryMin,
-      salaryMax: jobs.salaryMax,
-      description: jobs.description,
-      requirements: jobs.requirements,
-      applicationDeadline: jobs.applicationDeadline,
-      applicationPlatform: jobs.applicationPlatform,
-      externalApplyLink: jobs.externalApplyLink,
-      contactEmail: jobs.contactEmail,
-      status: jobs.status,
-      postedAt: jobs.postedAt,
-      createdAt: jobs.createdAt,
-      updatedAt: jobs.updatedAt,
-      employerId: jobs.employerId,
-      companyName: employerProfiles.companyName,
-      companyImage: employerProfiles.profileImage,
-      companyIndustry: employerProfiles.industry,
-    })
-    .from(jobs)
-    .leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
-    .where(and(...conditions))
-    .orderBy(desc(jobs.createdAt));
-
-  return NextResponse.json(result);
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser("auth");
-  if (!user || user.role !== "employer") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const userId = await getEmployerIdFromRequest();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const body = await req.json();
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
+    const body = await req.json();
+    const {
+      title,
+      category,
+      location,
+      arrangement,
+      employmentType,
+      experienceLevel,
+      salaryMin,
+      salaryMax,
+      applicationDeadline,
+      description,
+      requirements,
+      applicationPlatform,
+      externalApplyLink,
+      contactEmail,
+      status,
+    } = body;
+
+    if (!title?.trim())
+      return NextResponse.json({ error: "Title is required." }, { status: 400 });
+    if (!category?.trim())
+      return NextResponse.json({ error: "Category is required." }, { status: 400 });
+    if (!location?.trim())
+      return NextResponse.json({ error: "Location is required." }, { status: 400 });
+    if (!description?.trim())
+      return NextResponse.json({ error: "Description is required." }, { status: 400 });
+
+    const [newJob] = await db
+      .insert(jobs)
+      .values({
+        employerId: userId,
+        title: title.trim(),
+        category: category.trim(),
+        location: location.trim(),
+        arrangement: arrangement ?? "on_site",
+        employmentType: employmentType ?? "full_time",
+        experienceLevel: experienceLevel ?? "entry",
+        salaryMin: salaryMin ?? null,
+        salaryMax: salaryMax ?? null,
+        applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
+        description: description.trim(),
+        requirements: requirements?.trim() ?? null,
+        applicationPlatform: applicationPlatform || "internal",
+        externalApplyLink: externalApplyLink || null,
+        contactEmail: contactEmail || null,
+        status: status ?? "draft",
+        postedAt: status === "active" ? new Date() : null,
+      })
+      .returning();
+
+    return NextResponse.json(newJob, { status: 201 });
+  } catch (error) {
+    console.error("JOBS POST ERROR:", error);
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid data" },
-      { status: 400 }
+      { error: "Internal server error: " + String(error) },
+      { status: 500 }
     );
   }
-
-  const [job] = await db
-    .insert(jobs)
-    .values({
-      employerId: user.id,
-      title: parsed.data.title,
-      category: parsed.data.category,
-      location: parsed.data.location,
-      arrangement: parsed.data.arrangement,
-      employmentType: parsed.data.employmentType,
-      experienceLevel: parsed.data.experienceLevel,
-      salaryMin: parsed.data.salaryMin ?? null,
-      salaryMax: parsed.data.salaryMax ?? null,
-      applicationDeadline: parsed.data.applicationDeadline
-        ? new Date(parsed.data.applicationDeadline)
-        : null,
-      description: parsed.data.description,
-      requirements: parsed.data.requirements ?? null,
-      applicationPlatform: parsed.data.applicationPlatform,
-      externalApplyLink: parsed.data.externalApplyLink ?? null,
-      contactEmail: parsed.data.contactEmail ?? null,
-      status: parsed.data.status,
-      postedAt: parsed.data.status === "active" ? new Date() : null,
-    })
-    .returning();
-
-  return NextResponse.json(job, { status: 201 });
 }

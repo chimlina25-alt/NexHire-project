@@ -32,7 +32,6 @@ type ProfileData = {
   profileImageUrl: string;
 };
 
-// ── tiny toast ───────────────────────────────────────────────────────────────
 type Toast = { id: number; type: "success" | "error"; message: string };
 
 function ToastContainer({ toasts }: { toasts: Toast[] }) {
@@ -57,8 +56,7 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
   );
 }
 
-// ── main component ────────────────────────────────────────────────────────────
-const JobSeekerSettings = () => {
+const EmployeeSettings = () => {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState("general");
@@ -74,7 +72,8 @@ const JobSeekerSettings = () => {
     profileImageUrl: "",
   });
 
-  const [settings, setSettings] = useState({ accountEmail: "", recoveryEmail: "" });
+  const [accountEmail, setAccountEmail] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
 
   // password
@@ -87,7 +86,7 @@ const JobSeekerSettings = () => {
     confirmPassword: "",
   });
   const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [passwordError, setPasswordError] = useState("");
 
   // delete
   const [deleteText, setDeleteText] = useState("");
@@ -96,14 +95,13 @@ const JobSeekerSettings = () => {
   // logout
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  // ── toast helper ──────────────────────────────────────────────────────────
   const addToast = (type: "success" | "error", message: string) => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, type, message }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
 
-  // ── load profile ──────────────────────────────────────────────────────────
+  // Load profile + email from existing profile endpoint
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -120,9 +118,7 @@ const JobSeekerSettings = () => {
           profileImageUrl: data.profileImage || "",
         });
 
-        if (data.email) {
-          setSettings((prev) => ({ ...prev, accountEmail: data.email }));
-        }
+        if (data.email) setAccountEmail(data.email);
       } catch (err) {
         console.error("Settings: failed to load profile", err);
       } finally {
@@ -134,7 +130,7 @@ const JobSeekerSettings = () => {
 
   const fullName = `${profile.firstName} ${profile.lastName}`.trim() || "—";
 
-  // ── logout ────────────────────────────────────────────────────────────────
+  // ── Logout ────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     try {
       setLogoutLoading(true);
@@ -148,54 +144,55 @@ const JobSeekerSettings = () => {
     }
   };
 
-  // ── save emails ───────────────────────────────────────────────────────────
-  const handleSaveEmails = async () => {
+  // ── Update email — calls /api/auth/setting with action: "update_email" ────
+  const handleSaveEmail = async () => {
+    if (!newEmail || !newEmail.includes("@")) {
+      addToast("error", "Please enter a valid email address.");
+      return;
+    }
     try {
       setEmailLoading(true);
-      const res = await fetch("/api/auth/update-email", {
+      const res = await fetch("/api/auth/setting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountEmail: settings.accountEmail,
-          recoveryEmail: settings.recoveryEmail,
-        }),
+        body: JSON.stringify({ action: "update_email", newEmail }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update email");
-      addToast("success", "Email settings saved successfully.");
+      setAccountEmail(newEmail);
+      setNewEmail("");
+      addToast("success", "Email updated successfully.");
     } catch (err: any) {
-      addToast("error", err.message || "Failed to save email settings.");
+      addToast("error", err.message || "Failed to update email.");
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // ── SIMPLE password validation (Length >= 8 only) ─────────────────────────
-  const validatePassword = (pwd: string): string[] => {
-    const errs: string[] = [];
-    if (pwd.length < 8) errs.push("Password must be at least 8 characters long");
-    return errs;
-  };
-
-  // ── change password ───────────────────────────────────────────────────────
+  // ── Change password — calls /api/auth/setting with action: "change_password"
   const handleChangePassword = async () => {
-    const errs = validatePassword(passwordForm.newPassword);
-    if (errs.length) { 
-      setPasswordErrors(errs); 
-      return; 
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordErrors(["New passwords do not match"]);
+    setPasswordError("");
+
+    if (!passwordForm.currentPassword) {
+      setPasswordError("Please enter your current password.");
       return;
     }
-    setPasswordErrors([]);
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
 
     try {
       setPasswordLoading(true);
-      const res = await fetch("/api/auth/change-password", {
+      const res = await fetch("/api/auth/setting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "change_password",
           currentPassword: passwordForm.currentPassword,
           newPassword: passwordForm.newPassword,
         }),
@@ -211,12 +208,16 @@ const JobSeekerSettings = () => {
     }
   };
 
-  // ── delete account ────────────────────────────────────────────────────────
+  // ── Delete account — calls /api/auth/setting with action: "delete_account" ─
   const handleDeleteAccount = async () => {
     if (deleteText !== "DELETE") return;
     try {
       setDeleteLoading(true);
-      const res = await fetch("/api/auth/delete-account", { method: "DELETE" });
+      const res = await fetch("/api/auth/setting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_account" }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete account");
       router.push("/");
@@ -240,7 +241,7 @@ const JobSeekerSettings = () => {
     <div className="min-h-screen bg-[#f0f4f3] pb-16 font-sans">
       <ToastContainer toasts={toasts} />
 
-      {/* ── Header ── */}
+      {/* Header */}
       <header className="sticky top-0 z-50 flex items-center justify-between bg-[#051612] px-8 py-4 text-white shadow-lg">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="NexHire" className="h-8 w-8" />
@@ -280,7 +281,7 @@ const JobSeekerSettings = () => {
         </Link>
       </header>
 
-      {/* ── Page title ── */}
+      {/* Page title */}
       <main className="mx-auto max-w-6xl px-6 py-10 md:px-10">
         <div className="mb-8">
           <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#40b594]">Account</p>
@@ -291,7 +292,7 @@ const JobSeekerSettings = () => {
         </div>
 
         <div className="flex flex-col gap-6 lg:flex-row">
-          {/* ── Sidebar ── */}
+          {/* Sidebar */}
           <aside className="flex-shrink-0 lg:w-72">
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
               {tabs.map((tab, idx) => {
@@ -306,8 +307,11 @@ const JobSeekerSettings = () => {
                       idx !== 0 ? "border-t border-gray-100" : ""
                     } ${
                       isActive
-                        ? isDanger ? "bg-red-50 text-red-600" : "bg-[#f0f9f6] text-[#071a15]"
-                        : isDanger ? "text-red-400 hover:bg-red-50 hover:text-red-600"
+                        ? isDanger
+                          ? "bg-red-50 text-red-600"
+                          : "bg-[#f0f9f6] text-[#071a15]"
+                        : isDanger
+                        ? "text-red-400 hover:bg-red-50 hover:text-red-600"
                         : "text-[#4a5a55] hover:bg-[#f8faf9] hover:text-[#071a15]"
                     }`}
                   >
@@ -322,8 +326,12 @@ const JobSeekerSettings = () => {
                             size={16}
                             className={
                               isActive
-                                ? isDanger ? "text-red-600" : "text-[#40b594]"
-                                : isDanger ? "text-red-400" : "text-[#6b7f79]"
+                                ? isDanger
+                                  ? "text-red-600"
+                                  : "text-[#40b594]"
+                                : isDanger
+                                ? "text-red-400"
+                                : "text-[#6b7f79]"
                             }
                           />
                         </div>
@@ -355,7 +363,7 @@ const JobSeekerSettings = () => {
             </button>
           </aside>
 
-          {/* ── Content ── */}
+          {/* Content */}
           <div className="min-w-0 flex-1">
 
             {/* ══ General Tab ══ */}
@@ -366,7 +374,7 @@ const JobSeekerSettings = () => {
                   <div className="border-b border-gray-100 px-8 py-6">
                     <h2 className="text-lg font-extrabold text-[#071a15]">Profile Overview</h2>
                     <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">
-                      Personal information, photo, and CV are managed from your profile page
+                      Personal information and CV are managed from your profile page
                     </p>
                   </div>
                   <div className="p-8">
@@ -407,55 +415,55 @@ const JobSeekerSettings = () => {
                   </div>
                 </div>
 
-                {/* Account Emails */}
+                {/* Update Email */}
                 <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                   <div className="border-b border-gray-100 px-8 py-6">
-                    <h2 className="text-lg font-extrabold text-[#071a15]">Account Emails</h2>
+                    <h2 className="text-lg font-extrabold text-[#071a15]">Account Email</h2>
                     <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">
-                      Manage the emails used for your account and recovery
+                      Update the email address used to sign in
                     </p>
                   </div>
                   <div className="p-8">
-                    <div className="space-y-6">
+                    <div className="max-w-md space-y-6">
+                      {/* Current email — read only */}
                       <div>
-                        <label className={labelClass}>Account Email</label>
+                        <label className={labelClass}>Current Email</label>
                         <div className="relative">
                           <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79]" />
                           <input
                             type="email"
-                            value={settings.accountEmail}
-                            onChange={(e) => setSettings((p) => ({ ...p, accountEmail: e.target.value }))}
-                            className={`${inputClass} pl-10`}
+                            value={accountEmail}
+                            disabled
+                            className={`${inputClass} pl-10 opacity-60 cursor-not-allowed`}
                           />
                         </div>
-                        <p className="ml-1 mt-2 text-xs font-semibold text-[#6b7f79]">
-                          Used for login and account notifications
-                        </p>
                       </div>
+                      {/* New email */}
                       <div>
-                        <label className={labelClass}>Recovery Email</label>
+                        <label className={labelClass}>New Email Address</label>
                         <div className="relative">
                           <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79]" />
                           <input
                             type="email"
-                            value={settings.recoveryEmail}
-                            onChange={(e) => setSettings((p) => ({ ...p, recoveryEmail: e.target.value }))}
+                            placeholder="Enter new email address"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
                             className={`${inputClass} pl-10`}
                           />
                         </div>
                         <p className="ml-1 mt-2 text-xs font-semibold text-[#6b7f79]">
-                          Used for recovery and backup communication
+                          You will use this email to sign in going forward
                         </p>
                       </div>
                       <div className="pt-2">
                         <button
                           type="button"
-                          onClick={handleSaveEmails}
-                          disabled={emailLoading}
-                          className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23] disabled:opacity-60"
+                          onClick={handleSaveEmail}
+                          disabled={emailLoading || !newEmail}
+                          className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {emailLoading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                          {emailLoading ? "Saving…" : "Save Changes"}
+                          {emailLoading ? "Saving…" : "Update Email"}
                         </button>
                       </div>
                     </div>
@@ -470,7 +478,7 @@ const JobSeekerSettings = () => {
                 <div className="border-b border-gray-100 px-8 py-6">
                   <h2 className="text-lg font-extrabold text-[#071a15]">Change Password</h2>
                   <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">
-                    Update your account password
+                    Update your account password — must be at least 8 characters
                   </p>
                 </div>
                 <div className="p-8">
@@ -485,7 +493,9 @@ const JobSeekerSettings = () => {
                           type={showCurrent ? "text" : "password"}
                           placeholder="Enter current password"
                           value={passwordForm.currentPassword}
-                          onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                          onChange={(e) =>
+                            setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))
+                          }
                           className={`${inputClass} pl-10 pr-10`}
                         />
                         <button
@@ -507,7 +517,9 @@ const JobSeekerSettings = () => {
                           type={showNew ? "text" : "password"}
                           placeholder="Minimum 8 characters"
                           value={passwordForm.newPassword}
-                          onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                          onChange={(e) =>
+                            setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))
+                          }
                           className={`${inputClass} pl-10 pr-10`}
                         />
                         <button
@@ -519,7 +531,7 @@ const JobSeekerSettings = () => {
                         </button>
                       </div>
                       <p className="ml-1 mt-2 text-xs font-semibold text-[#6b7f79]">
-                        Must be at least 8 characters long.
+                        Must be at least 8 characters.
                       </p>
                     </div>
 
@@ -532,9 +544,12 @@ const JobSeekerSettings = () => {
                           type={showConfirm ? "text" : "password"}
                           placeholder="Confirm new password"
                           value={passwordForm.confirmPassword}
-                          onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                          onChange={(e) =>
+                            setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))
+                          }
                           className={`${inputClass} pl-10 pr-10 ${
-                            passwordForm.confirmPassword && passwordForm.confirmPassword !== passwordForm.newPassword
+                            passwordForm.confirmPassword &&
+                            passwordForm.confirmPassword !== passwordForm.newPassword
                               ? "border-red-300 focus:border-red-400 focus:ring-red-200"
                               : ""
                           }`}
@@ -547,17 +562,18 @@ const JobSeekerSettings = () => {
                           {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
-                      {passwordForm.confirmPassword && passwordForm.confirmPassword !== passwordForm.newPassword && (
-                        <p className="ml-1 mt-1.5 text-xs font-semibold text-red-500">Passwords do not match</p>
-                      )}
+                      {passwordForm.confirmPassword &&
+                        passwordForm.confirmPassword !== passwordForm.newPassword && (
+                          <p className="ml-1 mt-1.5 text-xs font-semibold text-red-500">
+                            Passwords do not match
+                          </p>
+                        )}
                     </div>
 
-                    {/* Validation errors */}
-                    {passwordErrors.length > 0 && (
+                    {/* Single error message */}
+                    {passwordError && (
                       <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                        {passwordErrors.map((e) => (
-                          <p key={e} className="text-xs font-semibold text-red-600">• {e}</p>
-                        ))}
+                        <p className="text-xs font-semibold text-red-600">• {passwordError}</p>
                       </div>
                     )}
 
@@ -573,7 +589,11 @@ const JobSeekerSettings = () => {
                         }
                         className="flex items-center gap-2 rounded-xl bg-[#051612] px-6 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#0d2a23] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {passwordLoading ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
+                        {passwordLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Shield size={16} />
+                        )}
                         {passwordLoading ? "Updating…" : "Update Password"}
                       </button>
                     </div>
@@ -598,9 +618,7 @@ const JobSeekerSettings = () => {
                         <Trash2 size={18} className="text-red-600" />
                       </div>
                       <div>
-                        <h3 className="text-base font-extrabold text-[#071a15]">
-                          Delete Job Seeker Account
-                        </h3>
+                        <h3 className="text-base font-extrabold text-[#071a15]">Delete Account</h3>
                         <p className="mt-1 text-sm font-medium leading-relaxed text-[#4a5a55]">
                           This will permanently delete your account
                           {fullName !== "—" ? ` for ${fullName}` : ""}, saved jobs, messages, and
@@ -611,7 +629,9 @@ const JobSeekerSettings = () => {
                     <div className="space-y-4">
                       <div>
                         <label className="mb-2 block text-sm font-extrabold text-[#071a15]">
-                          Type <span className="font-black tracking-widest text-red-600">DELETE</span> to confirm
+                          Type{" "}
+                          <span className="font-black tracking-widest text-red-600">DELETE</span>{" "}
+                          to confirm
                         </label>
                         <input
                           type="text"
@@ -631,7 +651,11 @@ const JobSeekerSettings = () => {
                             : "cursor-not-allowed bg-red-100 text-red-300"
                         }`}
                       >
-                        {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        {deleteLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
                         {deleteLoading ? "Deleting…" : "Delete Account"}
                       </button>
                     </div>
@@ -666,4 +690,4 @@ function SummaryCard({
   );
 }
 
-export default JobSeekerSettings;
+export default EmployeeSettings;

@@ -1,3 +1,5 @@
+// app/api/auth/verify/route.ts — FULL FIXED FILE
+
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -22,11 +24,9 @@ function getRedirectByUser(user: {
   onboardingCompleted: boolean;
 }) {
   if (!user.role) return "/role_choosing";
-
   if (!user.onboardingCompleted) {
     return user.role === "employer" ? "/employer" : "/job_seeker";
   }
-
   return user.role === "employer" ? "/dashboard" : "/home_page";
 }
 
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        next: getRedirectByUser(user),
+        next: getRedirectByUser(user), 
       });
     }
 
@@ -127,10 +127,11 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        next: getRedirectByUser(user),
+        next: getRedirectByUser(user), 
       });
     }
 
+    // forgot_password
     const [user] = await db
       .select()
       .from(users)

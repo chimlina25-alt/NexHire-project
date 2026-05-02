@@ -19,14 +19,6 @@ export default function AdminDashboard() {
       .catch(() => setLoading(false));
   }, []);
 
-  const areaData = [
-    { name: "W1", value: 4200 }, { name: "W2", value: 5800 },
-    { name: "W3", value: 4900 }, { name: "W4", value: 7200 },
-    { name: "W5", value: 6100 }, { name: "W6", value: 8500 },
-    { name: "W7", value: 9200 }, { name: "W8", value: 11000 },
-    { name: "W9", value: data?.revenue ? Math.round(data.revenue) : 0 },
-  ];
-
   if (loading) {
     return (
       <div className="flex min-h-screen bg-[#f4f7f5]">
@@ -37,6 +29,8 @@ export default function AdminDashboard() {
       </div>
     );
   }
+
+  const revenueTrend = data?.revenueTrend ?? [];
 
   return (
     <div className="flex min-h-screen bg-[#f4f7f5] font-sans">
@@ -61,10 +55,10 @@ export default function AdminDashboard() {
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Total Users", value: data?.totalUsers?.toLocaleString() ?? "0", delta: "+12%", icon: Users, bg: "bg-[#0d1f1a]", text: "text-white", accent: "text-[#00ffa3]" },
-            { label: "Active Jobs", value: data?.activeJobs?.toLocaleString() ?? "0", delta: "• Live", icon: Briefcase, bg: "bg-[#00ffa3]", text: "text-[#0d1f1a]", accent: "text-[#0d1f1a]/60" },
-            { label: "Employers", value: data?.employers?.toLocaleString() ?? "0", delta: "+5%", icon: Building2, bg: "bg-white", text: "text-[#0d1f1a]", accent: "text-[#6b9e8a]" },
-            { label: "Revenue", value: `$${data?.revenue?.toFixed(2) ?? "0.00"}`, delta: "+67%", icon: TrendingUp, bg: "bg-white", text: "text-[#0d1f1a]", accent: "text-[#6b9e8a]" },
+            { label: "Total Users", value: data?.totalUsers?.toLocaleString() ?? "0", delta: `${data?.jobSeekers ?? 0} seekers`, icon: Users, bg: "bg-[#0d1f1a]", text: "text-white", accent: "text-[#00ffa3]" },
+            { label: "Active Jobs", value: data?.activeJobs?.toLocaleString() ?? "0", delta: `${data?.totalJobs ?? 0} total posted`, icon: Briefcase, bg: "bg-[#00ffa3]", text: "text-[#0d1f1a]", accent: "text-[#0d1f1a]/60" },
+            { label: "Employers", value: data?.employers?.toLocaleString() ?? "0", delta: "Registered companies", icon: Building2, bg: "bg-white", text: "text-[#0d1f1a]", accent: "text-[#6b9e8a]" },
+            { label: "Revenue", value: `$${data?.revenue?.toFixed(2) ?? "0.00"}`, delta: "From subscriptions", icon: TrendingUp, bg: "bg-white", text: "text-[#0d1f1a]", accent: "text-[#6b9e8a]" },
           ].map((stat, i) => {
             const Icon = stat.icon;
             return (
@@ -91,14 +85,17 @@ export default function AdminDashboard() {
                 <p className="text-3xl font-black text-[#0d1f1a] mt-1">
                   ${data?.revenue?.toFixed(2) ?? "0.00"}
                 </p>
+                <p className="text-xs text-[#6b9e8a] font-semibold mt-1">
+                  {(data?.recentSubscriptions?.length ?? 0)} paid subscriptions active
+                </p>
               </div>
               <span className="bg-[#00ffa3]/15 text-[#0d8a5a] text-xs font-black px-3 py-1.5 rounded-full flex items-center gap-1">
-                <ArrowUpRight size={12} /> 67%
+                <ArrowUpRight size={12} /> Live
               </span>
             </div>
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={areaData}>
+                <AreaChart data={revenueTrend}>
                   <defs>
                     <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#00ffa3" stopOpacity={0.2} />
@@ -108,7 +105,10 @@ export default function AdminDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af", fontWeight: 700 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af", fontWeight: 700 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }}
+                    formatter={(value: any) => [`$${value}`, "Revenue"]}
+                  />
                   <Area type="monotone" dataKey="value" stroke="#00ffa3" strokeWidth={2.5} fill="url(#colorVal)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -123,10 +123,10 @@ export default function AdminDashboard() {
                 <BarChart data={data?.weeklyJobPosts ?? []} margin={{ left: -25 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "#6b9e8a", fontWeight: 700 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "#6b9e8a", fontWeight: 700 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "#6b9e8a", fontWeight: 700 }} allowDecimals={false} />
                   <Tooltip contentStyle={{ background: "#1a3028", border: "none", borderRadius: 10, color: "#fff", fontSize: 11 }} />
-                  <Bar dataKey="previous" fill="#1e3d30" radius={[4, 4, 0, 0]} barSize={10} />
-                  <Bar dataKey="current" fill="#00ffa3" radius={[4, 4, 0, 0]} barSize={10} />
+                  <Bar dataKey="previous" fill="#1e3d30" radius={[4, 4, 0, 0]} barSize={10} name="Last week" />
+                  <Bar dataKey="current" fill="#00ffa3" radius={[4, 4, 0, 0]} barSize={10} name="This week" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -138,7 +138,7 @@ export default function AdminDashboard() {
           <div className="col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-6">
               <p className="font-black text-[#0d1f1a]">Top Job Categories</p>
-              <span className="text-xs text-[#6b9e8a] font-bold">This month</span>
+              <span className="text-xs text-[#6b9e8a] font-bold">All time</span>
             </div>
             <div className="space-y-4">
               {(data?.categoryBreakdown ?? []).length === 0 ? (
@@ -148,10 +148,13 @@ export default function AdminDashboard() {
                   <div key={i}>
                     <div className="flex justify-between items-center mb-1.5">
                       <span className="text-sm font-bold text-[#0d1f1a]">{cat.name}</span>
-                      <span className="text-xs font-black text-[#6b9e8a]">{cat.count} posts</span>
+                      <span className="text-xs font-black text-[#6b9e8a]">{cat.count} posts · {cat.pct}%</span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#00ffa3] rounded-full transition-all" style={{ width: `${cat.pct}%` }} />
+                      <div
+                        className="h-full bg-[#00ffa3] rounded-full transition-all duration-500"
+                        style={{ width: `${cat.pct}%` }}
+                      />
                     </div>
                   </div>
                 ))
@@ -178,7 +181,7 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <p className="text-xs font-bold text-[#0d1f1a]">{item.name}</p>
-                        <p className="text-[10px] text-gray-400 font-medium">{item.plan}</p>
+                        <p className="text-[10px] text-gray-400 font-medium capitalize">{item.plan}</p>
                       </div>
                     </div>
                     <span className="text-xs font-black text-[#00a36a]">{item.amount}</span>

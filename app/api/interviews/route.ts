@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, ne } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
   interviews,
@@ -27,7 +27,6 @@ export async function GET() {
         applicationId: interviews.applicationId,
         employerId: interviews.employerId,
         jobTitle: jobs.title,
-        // return as "company" to match frontend expectation
         company: employerProfiles.companyName,
         companyImage: employerProfiles.profileImage,
         salaryMin: jobs.salaryMin,
@@ -38,11 +37,13 @@ export async function GET() {
       .from(interviews)
       .innerJoin(jobApplications, eq(jobApplications.id, interviews.applicationId))
       .innerJoin(jobs, eq(jobs.id, jobApplications.jobId))
-      .innerJoin(
-        employerProfiles,
-        eq(employerProfiles.userId, interviews.employerId)
+      .innerJoin(employerProfiles, eq(employerProfiles.userId, interviews.employerId))
+      .where(
+        and(
+          eq(interviews.jobSeekerId, user.id),
+          ne(jobApplications.status, "archived") // ✅ exclude archived
+        )
       )
-      .where(eq(interviews.jobSeekerId, user.id))
       .orderBy(desc(interviews.scheduledAt));
 
     return NextResponse.json(result);
@@ -54,7 +55,6 @@ export async function GET() {
       .from(interviews)
       .where(eq(interviews.employerId, user.id))
       .orderBy(desc(interviews.scheduledAt));
-
     return NextResponse.json(result);
   }
 
