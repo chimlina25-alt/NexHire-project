@@ -35,6 +35,17 @@ type NotificationItem = {
   interviewLink?: string;
 };
 
+// Extract type alias to avoid TSX angle bracket parsing issue
+type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
+
+type TypeStyleEntry = {
+  badge: string;
+  iconBg: string;
+  iconColor: string;
+  button: string;
+  icon: IconComponent;
+};
+
 function formatRelativeTime(dateString: string) {
   const diff = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diff / 60000);
@@ -46,7 +57,34 @@ function formatRelativeTime(dateString: string) {
   return `${days}d ago`;
 }
 
+function extractDateFromDescription(description: string): string {
+  const match = description.match(/(\w+day,\s+\w+\s+\d{1,2},\s+\d{4})/i);
+  return match ? match[1] : "";
+}
+
+function extractTimeFromDescription(description: string): string {
+  const match = description.match(/at\s+(\d{1,2}:\d{2}\s*[AP]M)/i);
+  return match ? match[1] : "";
+}
+
+function extractLinkFromDescription(description: string): string {
+  const match = description.match(/[Ll]ink:\s*(\S+)/);
+  return match ? match[1] : "";
+}
+
+function extractLocationFromDescription(description: string): string {
+  const match = description.match(/[Ll]ocation:\s*(.+?)(?:\.|$)/);
+  return match ? match[1].trim() : "";
+}
+
 function mapItem(item: any): NotificationItem {
+  const description = item.description || "";
+
+  const interviewDate = item.meta?.date || extractDateFromDescription(description);
+  const interviewTime = item.meta?.time || extractTimeFromDescription(description);
+  const interviewLink = item.meta?.link || extractLinkFromDescription(description);
+  const interviewLocation = item.meta?.location || extractLocationFromDescription(description);
+
   return {
     id: item.id,
     type:
@@ -55,7 +93,7 @@ function mapItem(item: any): NotificationItem {
       : item.type === "application" ? "Application"
       : "System",
     title: item.title,
-    description: item.description,
+    description,
     time: formatRelativeTime(item.createdAt),
     actionText:
       item.type === "message" ? "View Message"
@@ -63,23 +101,29 @@ function mapItem(item: any): NotificationItem {
       : "Open",
     read: Boolean(item.readAt),
     archivedAt: item.archivedAt ?? null,
-    interviewDate: item.meta?.date,
-    interviewTime: item.meta?.time,
-    interviewLocation: item.meta?.location,
-    interviewLink: item.meta?.link,
+    interviewDate,
+    interviewTime,
+    interviewLocation,
+    interviewLink,
   };
 }
 
-const typeStyle: Record<
-  NotificationItem["type"],
-  {
-    badge: string;
-    iconBg: string;
-    iconColor: string;
-    button: string;
-    icon: React.ElementType;
+function shouldShowActionButton(notification: NotificationItem): boolean {
+  if (notification.type === "Interview" || notification.type === "Message") return true;
+  if (notification.type === "System") return false;
+  if (notification.type === "Application") {
+    const text = (notification.title + " " + notification.description).toLowerCase();
+    return !(
+      text.includes("reject") ||
+      text.includes("under review") ||
+      text.includes("withdrawn") ||
+      text.includes("archived")
+    );
   }
-> = {
+  return true;
+}
+
+const typeStyle: Record<string, TypeStyleEntry> = {
   Interview: {
     badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
     iconBg: "bg-[#051612]",
@@ -110,11 +154,23 @@ const typeStyle: Record<
   },
 };
 
-// ── INTERVIEW MODAL ─────────────────────────────────────────────────────────────
-function InterviewModal({ notification, onClose }: { notification: NotificationItem; onClose: () => void }) {
+// ── INTERVIEW MODAL ──────────────────────────────────────────────────────────────
+function InterviewModal({
+  notification,
+  onClose,
+}: {
+  notification: NotificationItem;
+  onClose: () => void;
+}) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between bg-[#f8faf9]">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#051612] text-[#40b594]">
@@ -125,49 +181,95 @@ function InterviewModal({ notification, onClose }: { notification: NotificationI
               <p className="text-sm text-[#6b7f79]">{notification.title}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-200 transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg text-gray-400 hover:bg-gray-200 transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
+
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 gap-4">
+            {/* Date & Time */}
             <div className="flex items-start gap-3 p-4 rounded-xl bg-[#f0f9f6] border border-[#d1e8e3]">
               <Calendar size={18} className="text-[#40b594] mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-[#6b7f79]">Date & Time</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#6b7f79]">
+                  Date & Time
+                </p>
                 <p className="text-sm font-bold text-[#071a15]">
-                  {notification.interviewDate || "Date not specified"}
-                  {notification.interviewTime && <span className="ml-2 text-[#40b594]">at {notification.interviewTime}</span>}
+                  {notification.interviewDate ? (
+                    <>
+                      {notification.interviewDate}
+                      {notification.interviewTime && (
+                        <span className="ml-2 text-[#40b594]">
+                          at {notification.interviewTime}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[#9ab0aa]">Date not specified</span>
+                  )}
                 </p>
               </div>
             </div>
+
+            {/* Location / Link */}
             <div className="flex items-start gap-3 p-4 rounded-xl bg-[#f0f9f6] border border-[#d1e8e3]">
               <MapPin size={18} className="text-[#40b594] mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-[#6b7f79]">Location / Link</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#6b7f79]">
+                  Location / Link
+                </p>
                 {notification.interviewLink ? (
-                  <a href={notification.interviewLink} target="_blank" rel="noreferrer"
-                    className="text-sm font-bold text-[#0a7e61] hover:underline flex items-center gap-1">
+                  <a
+                    href={
+                      notification.interviewLink.startsWith("http")
+                        ? notification.interviewLink
+                        : `https://${notification.interviewLink}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-bold text-[#0a7e61] hover:underline flex items-center gap-1"
+                  >
                     Join Meeting <ExternalLink size={12} />
                   </a>
+                ) : notification.interviewLocation ? (
+                  <p className="text-sm font-bold text-[#071a15]">
+                    {notification.interviewLocation}
+                  </p>
                 ) : (
-                  <p className="text-sm font-bold text-[#071a15]">{notification.interviewLocation || "On-site"}</p>
+                  <p className="text-sm font-bold text-[#071a15]">On-site</p>
                 )}
               </div>
             </div>
           </div>
+
           <div>
             <h3 className="text-sm font-extrabold text-[#071a15] mb-2">Description</h3>
             <p className="text-sm text-[#4a5a55] leading-relaxed">{notification.description}</p>
           </div>
         </div>
+
         <div className="px-6 py-4 border-t border-gray-100 bg-[#f8faf9] flex justify-end gap-3">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-[#6b7f79] hover:bg-white transition-all">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-[#6b7f79] hover:bg-white transition-all"
+          >
             Close
           </button>
           {notification.interviewLink && (
-            <a href={notification.interviewLink} target="_blank" rel="noreferrer"
-              className="px-5 py-2.5 rounded-xl bg-[#051612] text-white text-sm font-bold hover:bg-[#0d2a23] transition-all flex items-center gap-2">
+            <a
+              href={
+                notification.interviewLink.startsWith("http")
+                  ? notification.interviewLink
+                  : `https://${notification.interviewLink}`
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="px-5 py-2.5 rounded-xl bg-[#051612] text-white text-sm font-bold hover:bg-[#0d2a23] transition-all flex items-center gap-2"
+            >
               Join Now <Video size={16} />
             </a>
           )}
@@ -199,22 +301,26 @@ function NotificationCard({
   onDelete: (id: string) => void;
   onAction: (n: NotificationItem) => void;
 }) {
-  const style = typeStyle[notification.type];
+  const style = typeStyle[notification.type] ?? typeStyle["System"];
   const Icon = style.icon;
   const isMenuOpen = menuOpenId === notification.id;
+  const showButton = shouldShowActionButton(notification);
 
   return (
-    <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-all ${
-      isArchiveView
-        ? "border-gray-100 opacity-75"
-        : notification.read
-        ? "border-gray-100"
-        : "border-l-4 border-b-gray-100 border-l-[#40b594] border-r-gray-100 border-t-gray-100"
-    } hover:border-l-[#40b594] hover:shadow-md`}>
+    <div
+      className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-all ${
+        isArchiveView
+          ? "border-gray-100 opacity-75"
+          : notification.read
+          ? "border-gray-100"
+          : "border-l-4 border-b-gray-100 border-l-[#40b594] border-r-gray-100 border-t-gray-100"
+      } hover:border-l-[#40b594] hover:shadow-md`}
+    >
       <div className="p-7">
+        {/* Top row */}
         <div className="mb-4 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${style.iconBg}`}>
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${style.iconBg}`}>
               <Icon size={18} className={style.iconColor} />
             </div>
             <div>
@@ -234,7 +340,10 @@ function NotificationCard({
             )}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : notification.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpenId(isMenuOpen ? null : notification.id);
+              }}
               className="rounded-lg p-1.5 text-[#6b7f79] transition-all hover:bg-[#f0f4f3] hover:text-[#071a15]"
             >
               <MoreVertical size={18} />
@@ -246,20 +355,30 @@ function NotificationCard({
                   <>
                     {!notification.read && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); onMarkRead(notification.id); setMenuOpenId(null); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMarkRead(notification.id);
+                          setMenuOpenId(null);
+                        }}
                         className="w-full text-left px-4 py-3 text-sm font-bold text-[#071a15] hover:bg-[#f0f9f6] flex items-center gap-2"
                       >
                         <CheckCircle size={14} className="text-[#40b594]" /> Mark as read
                       </button>
                     )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); onArchive(notification.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onArchive(notification.id);
+                      }}
                       className="w-full text-left px-4 py-3 text-sm font-bold text-[#6b7f79] hover:bg-[#f0f9f6] flex items-center gap-2 border-t border-gray-50"
                     >
                       <Archive size={14} /> Archive
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(notification.id);
+                      }}
                       className="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50"
                     >
                       <Trash2 size={14} /> Delete
@@ -268,13 +387,19 @@ function NotificationCard({
                 ) : (
                   <>
                     <button
-                      onClick={(e) => { e.stopPropagation(); onRestore(notification.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRestore(notification.id);
+                      }}
                       className="w-full text-left px-4 py-3 text-sm font-bold text-[#40b594] hover:bg-[#f0f9f6] flex items-center gap-2"
                     >
                       <RotateCcw size={14} /> Restore
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(notification.id);
+                      }}
                       className="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50"
                     >
                       <Trash2 size={14} /> Delete
@@ -286,22 +411,28 @@ function NotificationCard({
           </div>
         </div>
 
+        {/* Content */}
         <div className="ml-1">
-          <h3 className="mb-1 text-base font-extrabold leading-snug text-[#071a15]">{notification.title}</h3>
-          <p className="text-sm font-medium leading-relaxed text-[#4a5a55]">{notification.description}</p>
+          <h3 className="mb-1 text-base font-extrabold leading-snug text-[#071a15]">
+            {notification.title}
+          </h3>
+          <p className="text-sm font-medium leading-relaxed text-[#4a5a55]">
+            {notification.description}
+          </p>
         </div>
 
-        {!isArchiveView && (
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={() => onAction(notification)}
-              className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all ${style.button}`}
-            >
-              {notification.actionText} <ArrowRight size={16} />
-            </button>
-          </div>
-        )}
+        {/* Action button */}
+        {!isArchiveView && (notification.type === "Interview" || notification.type === "Message") && (
+  <div className="mt-5">
+    <button
+      type="button"
+      onClick={() => onAction(notification)}
+      className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all ${style.button}`}
+    >
+      {notification.actionText} <ArrowRight size={16} />
+    </button>
+  </div>
+)}
       </div>
     </div>
   );
@@ -320,7 +451,6 @@ export default function NotificationsPage() {
 
   const unreadCount = inbox.filter((n) => !n.read).length;
 
-  // Close menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -399,25 +529,41 @@ export default function NotificationsPage() {
 
   const handleAction = (notification: NotificationItem) => {
     if (!notification.read) markOneRead(notification.id);
-    if (notification.type === "Interview") setSelectedInterview(notification);
-    else if (notification.type === "Message") window.location.href = "/message";
+    if (notification.type === "Interview") {
+      setSelectedInterview(notification);
+    } else if (notification.type === "Message") {
+      window.location.href = "/message";
+    }
   };
 
   const displayList = view === "inbox" ? inbox : archived;
 
   return (
     <div className="min-h-screen bg-[#f0f4f3] pb-16 font-sans">
+      {/* Header */}
       <header className="sticky top-0 z-50 flex items-center justify-between bg-[#051612] px-8 py-4 text-white shadow-lg">
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="NexHire" className="h-8 w-8" />
           <span className="text-xl font-extrabold tracking-tight">NexHire</span>
         </div>
         <nav className="hidden items-center gap-8 text-sm font-semibold md:flex">
-          <Link href="/home_page"><button className="text-gray-300 hover:text-white transition-colors">Home</button></Link>
-          <Link href="/saved"><button className="text-gray-300 hover:text-white transition-colors">My Jobs</button></Link>
-          <Link href="/message"><button className="text-gray-300 hover:text-white transition-colors">Messages</button></Link>
-          <Link href="/notification"><button className="border-b-2 border-[#40b594] pb-1 text-[#40b594]">Notification</button></Link>
-          <Link href="/setting"><button className="text-gray-300 hover:text-white transition-colors">Settings</button></Link>
+          <Link href="/home_page">
+            <button className="text-gray-300 hover:text-white transition-colors">Home</button>
+          </Link>
+          <Link href="/saved">
+            <button className="text-gray-300 hover:text-white transition-colors">My Jobs</button>
+          </Link>
+          <Link href="/message">
+            <button className="text-gray-300 hover:text-white transition-colors">Messages</button>
+          </Link>
+          <Link href="/notification">
+            <button className="border-b-2 border-[#40b594] pb-1 text-[#40b594]">
+              Notification
+            </button>
+          </Link>
+          <Link href="/setting">
+            <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
+          </Link>
         </nav>
         <UserNavProfile />
       </header>
@@ -426,15 +572,23 @@ export default function NotificationsPage() {
         {/* Page header */}
         <div className="mb-10 flex items-start justify-between">
           <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#40b594]">Activity</p>
-            <h1 className="text-4xl font-extrabold leading-tight text-[#071a15]">Notifications</h1>
-            <p className="mt-1 font-medium text-[#4a5a55]">Keep track of your interview and message updates.</p>
+            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#40b594]">
+              Activity
+            </p>
+            <h1 className="text-4xl font-extrabold leading-tight text-[#071a15]">
+              Notifications
+            </h1>
+            <p className="mt-1 font-medium text-[#4a5a55]">
+              Keep track of your interview and message updates.
+            </p>
           </div>
           <div className="mt-2 flex items-center gap-3">
             {unreadCount > 0 && view === "inbox" && (
               <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 shadow-sm">
                 <Bell size={15} className="text-[#40b594]" />
-                <span className="text-sm font-extrabold text-[#071a15]">{unreadCount} unread</span>
+                <span className="text-sm font-extrabold text-[#071a15]">
+                  {unreadCount} unread
+                </span>
               </div>
             )}
             {view === "inbox" && (
@@ -449,17 +603,19 @@ export default function NotificationsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 bg-white border border-gray-100 p-1 rounded-2xl w-fit shadow-sm">
+        <div className="mb-8 flex gap-1 w-fit rounded-2xl border border-gray-100 bg-white p-1 shadow-sm">
           <button
             onClick={() => setView("inbox")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              view === "inbox" ? "bg-[#051612] text-white shadow-sm" : "text-gray-400 hover:text-gray-600"
+            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all ${
+              view === "inbox"
+                ? "bg-[#051612] text-white shadow-sm"
+                : "text-gray-400 hover:text-gray-600"
             }`}
           >
             <Bell size={15} />
             Inbox
             {unreadCount > 0 && (
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
                 view === "inbox" ? "bg-[#40b594] text-white" : "bg-gray-200 text-gray-600"
               }`}>
                 {unreadCount}
@@ -468,14 +624,16 @@ export default function NotificationsPage() {
           </button>
           <button
             onClick={() => setView("archived")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              view === "archived" ? "bg-[#051612] text-white shadow-sm" : "text-gray-400 hover:text-gray-600"
+            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all ${
+              view === "archived"
+                ? "bg-[#051612] text-white shadow-sm"
+                : "text-gray-400 hover:text-gray-600"
             }`}
           >
             <Archive size={15} />
             Archived
             {archived.length > 0 && (
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
                 view === "archived" ? "bg-[#40b594] text-white" : "bg-gray-200 text-gray-600"
               }`}>
                 {archived.length}
@@ -485,23 +643,31 @@ export default function NotificationsPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium border border-red-100">{error}</div>
+          <div className="mb-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-medium text-red-600">
+            {error}
+          </div>
         )}
 
         {loading ? (
-          <div className="bg-white rounded-2xl p-8 border border-gray-100 text-sm text-[#6b7f79]">
+          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-sm text-[#6b7f79]">
             Loading notifications...
           </div>
         ) : displayList.length === 0 ? (
           <div className="py-24 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-100 bg-white shadow-sm">
-              {view === "inbox" ? <Bell size={28} className="text-[#40b594]" /> : <InboxIcon size={28} className="text-[#40b594]" />}
+              {view === "inbox"
+                ? <Bell size={28} className="text-[#40b594]" />
+                : <InboxIcon size={28} className="text-[#40b594]" />
+              }
             </div>
             <p className="text-lg font-extrabold text-[#071a15]">
               {view === "inbox" ? "All caught up!" : "No archived notifications"}
             </p>
             <p className="mt-1 text-sm text-[#4a5a55]">
-              {view === "inbox" ? "No new notifications right now." : "Archived notifications will appear here."}
+              {view === "inbox"
+                ? "No new notifications right now."
+                : "Archived notifications will appear here."
+              }
             </p>
           </div>
         ) : (
@@ -525,7 +691,10 @@ export default function NotificationsPage() {
       </main>
 
       {selectedInterview && (
-        <InterviewModal notification={selectedInterview} onClose={() => setSelectedInterview(null)} />
+        <InterviewModal
+          notification={selectedInterview}
+          onClose={() => setSelectedInterview(null)}
+        />
       )}
     </div>
   );

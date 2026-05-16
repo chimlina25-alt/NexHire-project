@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq, count, desc } from "drizzle-orm";
+import { eq, count, desc, ne } from "drizzle-orm";
 import { db } from "@/app/db";
 import { jobs, employerProfiles, jobApplications } from "@/app/db/schema";
 import { getCurrentAdmin } from "@/lib/admin-auth";
@@ -28,6 +28,7 @@ export async function GET(req: Request) {
       })
       .from(jobs)
       .leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
+      .where(ne(jobs.status, "draft"))
       .orderBy(desc(jobs.createdAt));
 
     if (category && category !== "All") {
@@ -40,7 +41,6 @@ export async function GET(req: Request) {
           .select({ count: count() })
           .from(jobApplications)
           .where(eq(jobApplications.jobId, j.id));
-
         return { ...j, applicants: Number(appCount.count) };
       })
     );

@@ -59,20 +59,8 @@ function ActionMenu({
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Account Actions</p>
           </div>
 
-          {emp.status === "Active" ? (
-            <button
-              onClick={() => { setOpen(false); onSuspend(); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
-            >
-              <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Shield size={14} className="text-amber-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-bold text-sm">Suspend Account</p>
-                <p className="text-[10px] text-amber-500 font-medium">Disable employer access</p>
-              </div>
-            </button>
-          ) : (
+          {/* ++ FIXED — show Activate when Suspended, Suspend otherwise */}
+          {emp.status === "Suspended" ? (
             <button
               onClick={() => { setOpen(false); onActivate(); }}
               className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
@@ -85,7 +73,21 @@ function ActionMenu({
                 <p className="text-[10px] text-emerald-500 font-medium">Restore employer access</p>
               </div>
             </button>
+          ) : (
+            <button
+              onClick={() => { setOpen(false); onSuspend(); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Shield size={14} className="text-amber-600" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Suspend Account</p>
+                <p className="text-[10px] text-amber-500 font-medium">Disable employer access</p>
+              </div>
+            </button>
           )}
+          {/* ++ END FIXED */}
 
           <div className="h-px bg-gray-100 mx-3" />
 
@@ -319,10 +321,23 @@ export default function AdminEmployers() {
                     </p>
                   </div>
                 </div>
-                <div className={`px-5 py-3 rounded-b-2xl flex items-center justify-between ${emp.status === "Active" ? "bg-emerald-50" : "bg-gray-50"}`}>
+                {/* ++ FIXED — added Suspended style to status bar */}
+                <div className={`px-5 py-3 rounded-b-2xl flex items-center justify-between ${
+                  emp.status === "Active" ? "bg-emerald-50" :
+                  emp.status === "Suspended" ? "bg-red-50" :
+                  "bg-gray-50"
+                }`}>
                   <div className="flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${emp.status === "Active" ? "bg-emerald-500" : "bg-gray-400"}`} />
-                    <span className={`text-[10px] font-black ${emp.status === "Active" ? "text-emerald-700" : "text-gray-400"}`}>{emp.status}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      emp.status === "Active" ? "bg-emerald-500" :
+                      emp.status === "Suspended" ? "bg-red-500" :
+                      "bg-gray-400"
+                    }`} />
+                    <span className={`text-[10px] font-black ${
+                      emp.status === "Active" ? "text-emerald-700" :
+                      emp.status === "Suspended" ? "text-red-600" :
+                      "text-gray-400"
+                    }`}>{emp.status}</span>
                   </div>
                 </div>
               </div>
@@ -363,8 +378,17 @@ export default function AdminEmployers() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-full ${emp.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-400"}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${emp.status === "Active" ? "bg-emerald-500" : "bg-gray-400"}`} />
+                      {/* ++ FIXED — added Suspended style */}
+                      <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-full ${
+                        emp.status === "Active" ? "bg-emerald-50 text-emerald-700" :
+                        emp.status === "Suspended" ? "bg-red-50 text-red-600" :
+                        "bg-gray-50 text-gray-400"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          emp.status === "Active" ? "bg-emerald-500" :
+                          emp.status === "Suspended" ? "bg-red-500" :
+                          "bg-gray-400"
+                        }`} />
                         {emp.status}
                       </span>
                     </td>

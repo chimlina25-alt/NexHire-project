@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gt, or, ilike, gte, lte } from "drizzle-orm";
 import { db } from "@/app/db";
 import { jobs, employerProfiles, sessions, users } from "@/app/db/schema";
 import { createHash } from "crypto";
 import { cookies } from "next/headers";
-import { and, gt } from "drizzle-orm";
 
 async function getEmployerIdFromRequest(): Promise<string | null> {
   try {
@@ -41,7 +40,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const mine = searchParams.get("mine");
 
-    // ── Employer: fetch their own jobs (all statuses including drafts) ──
+    // ── Employer: fetch their own jobs (all statuses including drafts) ────────
     if (mine === "1") {
       const userId = await getEmployerIdFromRequest();
       if (!userId) {
@@ -57,70 +56,82 @@ export async function GET(req: Request) {
       return NextResponse.json({ jobs: myJobs, total: myJobs.length });
     }
 
-    // ── Public: fetch active jobs with filters ──
-    const category = searchParams.get("category") || "";
-    const arrangement = searchParams.get("arrangement") || "";
-    const employmentType = searchParams.get("employmentType") || "";
-    const search = searchParams.get("search") || "";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const offset = (page - 1) * limit;
+    // ── Public: active jobs with all filters applied in SQL ───────────────────
+    const search         = searchParams.get("search")?.trim() ?? "";
+    const category       = searchParams.get("category")?.trim() ?? "";
+    const arrangement    = searchParams.get("arrangement")?.trim() ?? "";
+    const employmentType = searchParams.get("employmentType")?.trim() ?? "";
+    const experienceLevel = searchParams.get("experienceLevel")?.trim() ?? "";
+    const salaryMin      = searchParams.get("salaryMin") ? Number(searchParams.get("salaryMin")) : null;
+    const salaryMax      = searchParams.get("salaryMax") ? Number(searchParams.get("salaryMax")) : null;
+    const page           = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
+    const limit          = Math.min(100, parseInt(searchParams.get("limit") ?? "20"));
+    const offset         = (page - 1) * limit;
 
-    let allJobs = await db
-      .select({
-        id: jobs.id,
-        title: jobs.title,
-        category: jobs.category,
-        location: jobs.location,
-        arrangement: jobs.arrangement,
-        employmentType: jobs.employmentType,
-        experienceLevel: jobs.experienceLevel,
-        salaryMin: jobs.salaryMin,
-        salaryMax: jobs.salaryMax,
-        description: jobs.description,
-        requirements: jobs.requirements,
-        applicationDeadline: jobs.applicationDeadline,
-        applicationPlatform: jobs.applicationPlatform,
-        externalApplyLink: jobs.externalApplyLink,
-        contactEmail: jobs.contactEmail,
-        status: jobs.status,
-        postedAt: jobs.postedAt,
-        createdAt: jobs.createdAt,
-        employerId: jobs.employerId,
-        companyName: employerProfiles.companyName,
-        industry: employerProfiles.industry,
-        companySize: employerProfiles.companySize,
-        currentAddress: employerProfiles.currentAddress,
-        profileImage: employerProfiles.profileImage,
-        websiteLink: employerProfiles.websiteLink,
-      })
-      .from(jobs)
-      .leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
-      .where(eq(jobs.status, "active"))
-      .orderBy(desc(jobs.postedAt));
+    // Build WHERE conditions — always start with status = active
+    const conditions = [eq(jobs.status, "active")];
 
-    if (category) {
-      allJobs = allJobs.filter((j) => j.category === category);
-    }
-    if (arrangement) {
-      allJobs = allJobs.filter((j) => j.arrangement === arrangement);
-    }
-    if (employmentType) {
-      allJobs = allJobs.filter((j) => j.employmentType === employmentType);
-    }
+    // Exact-match enum filters
+    if (arrangement)    conditions.push(eq(jobs.arrangement,    arrangement    as any));
+    if (employmentType) conditions.push(eq(jobs.employmentType, employmentType as any));
+    if (experienceLevel) conditions.push(eq(jobs.experienceLevel, experienceLevel as any));
+    if (category)       conditions.push(ilike(jobs.category, category));
+
+    // Salary range — match jobs whose range overlaps the requested range.
+    // A job matches if it has no salary (negotiable) OR its salary overlaps.
+    if (salaryMin !== null) conditions.push(gte(jobs.salaryMax, salaryMin));
+    if (salaryMax !== null) conditions.push(lte(jobs.salaryMin, salaryMax));
+
+    // Full-text search across title, category, location, and company name
     if (search) {
-      const q = search.toLowerCase();
-      allJobs = allJobs.filter(
-        (j) =>
-          j.title.toLowerCase().includes(q) ||
-          (j.companyName || "").toLowerCase().includes(q) ||
-          j.category.toLowerCase().includes(q) ||
-          j.location.toLowerCase().includes(q)
+      const pattern = `%${search}%`;
+      conditions.push(
+        or(
+          ilike(jobs.title,    pattern),
+          ilike(jobs.category, pattern),
+          ilike(jobs.location, pattern),
+          // companyName lives on employerProfiles — handled via the join below
+          ilike(employerProfiles.companyName, pattern),
+        )!
       );
     }
 
-    const total = allJobs.length;
-    const paginated = allJobs.slice(offset, offset + limit);
+    const filtered = await db
+      .select({
+        id:                  jobs.id,
+        title:               jobs.title,
+        category:            jobs.category,
+        location:            jobs.location,
+        arrangement:         jobs.arrangement,
+        employmentType:      jobs.employmentType,
+        experienceLevel:     jobs.experienceLevel,
+        salaryMin:           jobs.salaryMin,
+        salaryMax:           jobs.salaryMax,
+        description:         jobs.description,
+        requirements:        jobs.requirements,
+        applicationDeadline: jobs.applicationDeadline,
+        applicationPlatform: jobs.applicationPlatform,
+        externalApplyLink:   jobs.externalApplyLink,
+        contactEmail:        jobs.contactEmail,
+        status:              jobs.status,
+        postedAt:            jobs.postedAt,
+        createdAt:           jobs.createdAt,
+        employerId:          jobs.employerId,
+        companyName:         employerProfiles.companyName,
+        companyImage:        employerProfiles.profileImage,
+        companyIndustry:     employerProfiles.industry,
+        companyDescription:  employerProfiles.companyDescription,
+        companySize:         employerProfiles.companySize,
+        currentAddress:      employerProfiles.currentAddress,
+        websiteLink:         employerProfiles.websiteLink,
+      })
+      .from(jobs)
+      .leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
+      .where(and(...conditions))
+      .orderBy(desc(jobs.postedAt));
+
+    const total     = filtered.length;
+    const paginated = filtered.slice(offset, offset + limit);
 
     return NextResponse.json({ jobs: paginated, total, page, limit });
   } catch (error) {
@@ -170,23 +181,23 @@ export async function POST(req: Request) {
     const [newJob] = await db
       .insert(jobs)
       .values({
-        employerId: userId,
-        title: title.trim(),
-        category: category.trim(),
-        location: location.trim(),
-        arrangement: arrangement ?? "on_site",
-        employmentType: employmentType ?? "full_time",
-        experienceLevel: experienceLevel ?? "entry",
-        salaryMin: salaryMin ?? null,
-        salaryMax: salaryMax ?? null,
+        employerId:          userId,
+        title:               title.trim(),
+        category:            category.trim(),
+        location:            location.trim(),
+        arrangement:         arrangement       ?? "on_site",
+        employmentType:      employmentType    ?? "full_time",
+        experienceLevel:     experienceLevel   ?? "entry",
+        salaryMin:           salaryMin         ?? null,
+        salaryMax:           salaryMax         ?? null,
         applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
-        description: description.trim(),
-        requirements: requirements?.trim() ?? null,
-        applicationPlatform: applicationPlatform || "internal",
-        externalApplyLink: externalApplyLink || null,
-        contactEmail: contactEmail || null,
-        status: status ?? "draft",
-        postedAt: status === "active" ? new Date() : null,
+        description:         description.trim(),
+        requirements:        requirements?.trim() ?? null,
+        applicationPlatform: applicationPlatform  || "internal",
+        externalApplyLink:   externalApplyLink    || null,
+        contactEmail:        contactEmail         || null,
+        status:              status               ?? "draft",
+        postedAt:            status === "active" ? new Date() : null,
       })
       .returning();
 

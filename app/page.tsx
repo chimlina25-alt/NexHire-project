@@ -25,10 +25,10 @@ export default function App() {
             </div>
 
             <nav className="hidden md:flex items-center gap-15">
-              <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">Home</a>
-              <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">Pricing</a>
-              <a href="#" className="text-gray-600 hover:text-[#1f4e3d] font-medium">About Us</a>
-            </nav>
+  <a href="/" className="text-[#0d9488] font-medium">Home</a>
+  <a href="/pricing" className="text-gray-600 hover:text-[#1f4e3d] font-medium">Pricing</a>
+  <a href="/about" className="text-gray-600 hover:text-[#1f4e3d] font-medium">About Us</a>
+</nav>
 
             <div className="hidden md:flex items-center gap-4">
               <Link href="/login">

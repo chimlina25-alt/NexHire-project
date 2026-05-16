@@ -59,20 +59,8 @@ function ActionMenu({
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Account Actions</p>
           </div>
 
-          {user.status === "Active" || user.status === "Inactive" ? (
-            <button
-              onClick={() => { setOpen(false); onSuspend(); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
-            >
-              <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Shield size={14} className="text-amber-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-bold text-sm">Suspend Account</p>
-                <p className="text-[10px] text-amber-500 font-medium">Disable user access</p>
-              </div>
-            </button>
-          ) : (
+          {/* ++ FIXED — show Suspend for Active/Inactive, Activate for Suspended */}
+          {user.status === "Suspended" ? (
             <button
               onClick={() => { setOpen(false); onActivate(); }}
               className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
@@ -85,7 +73,21 @@ function ActionMenu({
                 <p className="text-[10px] text-emerald-500 font-medium">Restore user access</p>
               </div>
             </button>
+          ) : (
+            <button
+              onClick={() => { setOpen(false); onSuspend(); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Shield size={14} className="text-amber-600" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Suspend Account</p>
+                <p className="text-[10px] text-amber-500 font-medium">Disable user access</p>
+              </div>
+            </button>
           )}
+          {/* ++ END FIXED */}
 
           <div className="h-px bg-gray-100 mx-3" />
 
@@ -232,10 +234,12 @@ export default function ManageUsers() {
     return 0;
   });
 
+  // ++ FIXED — added Suspended to counts
   const counts = {
     All: users.length,
     Active: users.filter((u) => u.status === "Active").length,
-    Inactive: users.filter((u) => u.status !== "Active").length,
+    Suspended: users.filter((u) => u.status === "Suspended").length,
+    Inactive: users.filter((u) => u.status === "Inactive").length,
   };
 
   return (

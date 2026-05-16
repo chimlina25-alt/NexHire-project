@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { UseFormRegisterReturn, FieldError } from "react-hook-form";
@@ -32,7 +31,7 @@ export default function FormInput({
           {...registration}
           type={inputType}
           placeholder={placeholder}
-          className={`w-full px-4 py-3 text-sm rounded-2xl border bg-[#ebf2ff] focus:outline-none focus:ring-2 focus:ring-[#00a37b] transition-all placeholder:text-gray-300 ${
+          className={`w-full px-4 py-3 text-sm text-gray-900 rounded-2xl border bg-[#f8fafc] focus:outline-none focus:ring-2 focus:ring-[#00a37b] focus:bg-white transition-all placeholder:text-gray-400 ${
             toggleable ? "pr-11" : ""
           } ${error ? "border-red-400" : "border-transparent"}`}
         />

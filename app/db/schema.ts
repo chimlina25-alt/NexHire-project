@@ -190,19 +190,7 @@ export const conversations = pgTable("conversations", {
  lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const messages = pgTable("messages", {
- id: uuid("id").defaultRandom().primaryKey(),
- conversationId: uuid("conversation_id").notNull(),
- senderId: uuid("sender_id").notNull(),
- senderType: text("sender_type").notNull().default("user"),
- text: text("text"),
- attachmentUrl: text("attachment_url"),
- attachmentName: text("attachment_name"),
- attachmentType: text("attachment_type"),
- deletedBySender: boolean("deleted_by_sender").notNull().default(false),
- editedAt: timestamp("edited_at", { withTimezone: true }),
- createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+
 
 export const messageDeletes = pgTable("message_deletes", {
  id: uuid("id").defaultRandom().primaryKey(),
@@ -234,21 +222,116 @@ export const adminConversations = pgTable("admin_conversations", {
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const adminMessages = pgTable("admin_messages", {
- id: uuid("id").defaultRandom().primaryKey(),
- conversationId: uuid("conversation_id").notNull(),
- senderId: uuid("sender_id").notNull(),
- senderType: text("sender_type").notNull(),
- text: text("text").notNull(),
- editedAt: timestamp("edited_at", { withTimezone: true }),
- createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
 export const broadcastLogs = pgTable("broadcast_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   adminId: uuid("admin_id").notNull(),
   message: text("message").notNull(),
   audience: text("audience").notNull(),
   sentCount: integer("sent_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+// These should already exist — verify and add if missing:
+export const conversationArchives = pgTable("conversation_archives", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  convArchiveUnique: uniqueIndex("conv_archive_user_idx").on(table.conversationId, table.userId),
+}));
+
+
+
+
+export const messageReads = pgTable("message_reads", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  messageReadsUnique: uniqueIndex("message_reads_msg_user_idx").on(table.messageId, table.userId),
+}));
+
+export const messageReplies = pgTable("message_replies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id").notNull(),        // the new message
+  replyToId: uuid("reply_to_id").notNull(),        // the message being replied to
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const userPresence = pgTable("user_presence", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().unique(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  isOnline: boolean("is_online").notNull().default(false),
+});
+
+export const adminMessageReads = pgTable("admin_message_reads", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  adminMsgReadsUnique: uniqueIndex("admin_message_reads_msg_user_idx").on(table.messageId, table.userId),
+}));
+
+export const adminMessageReplies = pgTable("admin_message_replies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id").notNull(),
+  replyToId: uuid("reply_to_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const conversationDeletes = pgTable("conversation_deletes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  convDeleteUnique: uniqueIndex("conv_delete_user_idx").on(table.conversationId, table.userId),
+}));
+
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull(),
+  senderId: uuid("sender_id").notNull(),
+  senderType: text("sender_type").notNull().default("user"),
+  text: text("text"),
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
+  deletedBySender: boolean("deleted_by_sender").notNull().default(false),
+  editedAt: timestamp("edited_at", { withTimezone: true }),
+  replyToId: uuid("reply_to_id"),   // ADD THIS LINE
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const adminMessages = pgTable("admin_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull(),
+  senderId: uuid("sender_id").notNull(),
+  senderType: text("sender_type").notNull(),
+  text: text("text"),
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
+  editedAt: timestamp("edited_at", { withTimezone: true }),
+  replyToId: uuid("reply_to_id"),   // ADD THIS LINE
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const paymentRequests = pgTable("payment_requests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  employerId: uuid("employer_id").notNull(),
+  transactionNumber: text("transaction_number").notNull().unique(),
+  plan: text("plan").notNull(),                    // standard | premium
+  amount: text("amount").notNull(),                // 4.99 | 10.99
+  bank: text("bank").notNull(),                    // aba | acleda
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
+  note: text("note"),                              // admin rejection reason
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

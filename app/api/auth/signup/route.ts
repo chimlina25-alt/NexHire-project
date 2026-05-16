@@ -35,7 +35,17 @@ export async function POST(req: Request) {
       .limit(1);
 
     if (existing) {
-      return NextResponse.json({ error: "Email already exists" }, { status: 409 });
+      // ++ IMPROVED — tell them specifically if it's a Google account
+      if (!existing.passwordHash && existing.googleId) {
+        return NextResponse.json(
+          { error: "This email is already registered via Google. Please sign in with Google instead." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "An account with this email already exists. Please sign in instead." },
+        { status: 409 }
+      );
     }
 
     const passwordHash = await hashPassword(parsed.data.password);
@@ -49,17 +59,14 @@ export async function POST(req: Request) {
     await sendOtpEmail(email, code, "Verify your NexHire signup");
 
     return NextResponse.json({
-  success: true,
-  next: `/verify?type=signup&email=${encodeURIComponent(email)}`,
-});
+      success: true,
+      next: `/verify?type=signup&email=${encodeURIComponent(email)}`,
+    });
 
   } catch (error) {
     console.error("SIGNUP ERROR:", error);
-
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

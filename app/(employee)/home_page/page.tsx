@@ -18,28 +18,58 @@ import {
   Send,
   Briefcase,
   Calendar,
+  CheckCircle2,
+  Monitor,
 } from "lucide-react";
 import Link from "next/link";
 import UserNavProfile from "@/components/ui/UserNavProfile";
 
-const jobTypeOptions = ["Full-time", "Part-time", "Contract", "Freelance", "Internship"];
+// ── CONSTANTS ─────────────────────────────────────────────────────────────────
+const jobTypeOptions    = ["Full-time", "Part-time", "Contract", "Freelance", "Internship"];
 const experienceOptions = ["Entry Level", "Mid Level", "Senior", "Lead / Manager", "Executive"];
-const salaryOptions = ["$50k – $100k", "$100k – $150k", "$150k – $200k", "$200k+"];
+const salaryOptions     = ["$50k – $100k", "$100k – $150k", "$150k – $200k", "$200k+"];
+const arrangementOptions = ["On-site", "Remote", "Hybrid"];
+
+const jobTypeMap: Record<string, string> = {
+  "Full-time":  "full_time",
+  "Part-time":  "part_time",
+  "Contract":   "contract",
+  "Freelance":  "freelance",
+  "Internship": "internship",
+};
+const arrangementMap: Record<string, string> = {
+  "On-site": "on_site",
+  "Remote":  "remote",
+  "Hybrid":  "hybrid",
+};
+const experienceMap: Record<string, string> = {
+  "Entry Level":    "entry",
+  "Mid Level":      "mid",
+  "Senior":         "senior",
+  "Lead / Manager": "lead",
+  "Executive":      "executive",
+};
+const salaryRangeMap: Record<string, { min?: number; max?: number }> = {
+  "$50k – $100k":  { min: 50000,  max: 100000 },
+  "$100k – $150k": { min: 100000, max: 150000 },
+  "$150k – $200k": { min: 150000, max: 200000 },
+  "$200k+":        { min: 200000 },
+};
 
 const tagColors: Record<string, string> = {
-  full_time: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  part_time: "bg-blue-50 text-blue-700 border-blue-100",
-  contract: "bg-orange-50 text-orange-700 border-orange-100",
-  freelance: "bg-pink-50 text-pink-700 border-pink-100",
+  full_time:  "bg-emerald-50 text-emerald-700 border-emerald-100",
+  part_time:  "bg-blue-50 text-blue-700 border-blue-100",
+  contract:   "bg-orange-50 text-orange-700 border-orange-100",
+  freelance:  "bg-pink-50 text-pink-700 border-pink-100",
   internship: "bg-yellow-50 text-yellow-700 border-yellow-100",
-  remote: "bg-violet-50 text-violet-700 border-violet-100",
-  on_site: "bg-gray-50 text-gray-600 border-gray-200",
-  hybrid: "bg-teal-50 text-teal-700 border-teal-100",
-  senior: "bg-amber-50 text-amber-700 border-amber-100",
-  mid: "bg-sky-50 text-sky-700 border-sky-100",
-  entry: "bg-rose-50 text-rose-700 border-rose-100",
-  executive: "bg-indigo-50 text-indigo-700 border-indigo-100",
-  lead: "bg-purple-50 text-purple-700 border-purple-100",
+  remote:     "bg-violet-50 text-violet-700 border-violet-100",
+  on_site:    "bg-gray-50 text-gray-600 border-gray-200",
+  hybrid:     "bg-teal-50 text-teal-700 border-teal-100",
+  senior:     "bg-amber-50 text-amber-700 border-amber-100",
+  mid:        "bg-sky-50 text-sky-700 border-sky-100",
+  entry:      "bg-rose-50 text-rose-700 border-rose-100",
+  executive:  "bg-indigo-50 text-indigo-700 border-indigo-100",
+  lead:       "bg-purple-50 text-purple-700 border-purple-100",
 };
 
 function formatSalary(min: number | null, max: number | null) {
@@ -51,19 +81,19 @@ function formatSalary(min: number | null, max: number | null) {
 
 function formatLabel(val: string) {
   const map: Record<string, string> = {
-    full_time: "Full-time",
-    part_time: "Part-time",
-    contract: "Contract",
-    freelance: "Freelance",
+    full_time:  "Full-time",
+    part_time:  "Part-time",
+    contract:   "Contract",
+    freelance:  "Freelance",
     internship: "Internship",
-    on_site: "On-site",
-    remote: "Remote",
-    hybrid: "Hybrid",
-    entry: "Entry Level",
-    mid: "Mid Level",
-    senior: "Senior",
-    lead: "Lead / Manager",
-    executive: "Executive",
+    on_site:    "On-site",
+    remote:     "Remote",
+    hybrid:     "Hybrid",
+    entry:      "Entry Level",
+    mid:        "Mid Level",
+    senior:     "Senior",
+    lead:       "Lead / Manager",
+    executive:  "Executive",
   };
   return map[val] ?? val;
 }
@@ -78,6 +108,7 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(days / 30)} months ago`;
 }
 
+// ── TYPES ─────────────────────────────────────────────────────────────────────
 type Job = {
   id: string;
   title: string;
@@ -102,192 +133,269 @@ type Job = {
   companyDescription: string | null;
 };
 
+type Filters = {
+  jobType:     string;
+  experience:  string;
+  salary:      string;
+  arrangement: string;
+};
+
 // ── JOB DETAIL MODAL ──────────────────────────────────────────────────────────
 function JobDetailModal({
-  job,
-  onClose,
-  onSave,
-  onApply,
-  saved,
-  applied,
+  job, onClose, onSave, onApply, saved, applied,
 }: {
-  job: Job;
-  onClose: () => void;
-  onSave: () => void;
-  onApply: () => void;
-  saved: boolean;
-  applied: boolean;
+  job: Job; onClose: () => void; onSave: () => void;
+  onApply: () => void; saved: boolean; applied: boolean;
 }) {
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [onClose]);
+
+  const tags = ([job.employmentType, job.arrangement, job.experienceLevel] as string[]).filter(Boolean);
+
+  const toLines = (text: string) =>
+    text.split(/\n+/).map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  const descLines = toLines(job.description ?? "");
+  const reqLines  = toLines(job.requirements ?? "");
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(5,22,18,0.55)", backdropFilter: "blur(2px)" }}
-      onClick={onClose}
-    >
+    <>
+      {/* Layer 1 — full-screen dim. Navbar is z-50 so it sits on top naturally. */}
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-40"
+        style={{ background: "rgba(5,22,18,0.45)", backdropFilter: "blur(4px)" }}
+        onClick={onClose}
+      />
+
+      {/* Layer 2 — centering container that starts BELOW the navbar (top: 64px) */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-center px-4"
+        style={{ top: 64 }}
+        onClick={onClose}
       >
-        <div className="px-8 py-6 border-b border-gray-100 flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#f0f9f6] border border-[#d1e8e3] flex items-center justify-center overflow-hidden shrink-0">
-              {job.companyImage ? (
-                <img src={job.companyImage} alt={job.companyName ?? ""} className="w-full h-full object-cover" />
-              ) : (
-                <Building2 size={24} className="text-[#40b594]" />
-              )}
-            </div>
-            <div>
-              <h2 className="text-xl font-extrabold text-[#071a15]">{job.title}</h2>
-              {job.companyName && (
-                <p className="text-sm font-semibold text-[#40b594]">{job.companyName}</p>
-              )}
-              <div className="flex items-center gap-3 mt-1">
-                <span className="flex items-center gap-1 text-xs text-gray-400 font-medium">
-                  <MapPin size={11} /> {job.location}
-                </span>
-                <span className="flex items-center gap-1 text-xs text-gray-400 font-medium">
-                  <Clock size={11} /> {timeAgo(job.createdAt)}
-                </span>
+        {/* White card */}
+        <div
+          className="bg-white rounded-2xl w-full max-w-2xl flex flex-col overflow-hidden"
+          style={{
+            maxHeight: "calc(100vh - 64px - 2.5rem)",
+            boxShadow: "0 20px 60px rgba(5,22,18,0.18)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="px-8 py-6 border-b border-gray-100 flex items-start justify-between flex-shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#f0f9f6] border border-[#d1e8e3] flex items-center justify-center overflow-hidden shrink-0">
+                {job.companyImage
+                  ? <img src={job.companyImage} alt={job.companyName ?? ""} className="w-full h-full object-cover" />
+                  : <Building2 size={20} className="text-[#40b594]" />}
               </div>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-[#6b7f79] hover:bg-gray-100 shrink-0">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-8 py-6 space-y-6">
-          <div className="flex flex-wrap gap-2">
-            {([job.employmentType, job.arrangement, job.experienceLevel] as string[])
-              .filter(Boolean)
-              .map((tag) => (
-                <span
-                  key={tag}
-                  className={"text-xs font-bold px-3 py-1.5 rounded-lg border " + (tagColors[tag] ?? "bg-gray-50 text-gray-600 border-gray-200")}
-                >
-                  {formatLabel(tag)}
-                </span>
-              ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-start gap-3 bg-[#f8faf9] rounded-xl p-4">
-              <DollarSign size={16} className="text-[#40b594] mt-0.5 shrink-0" />
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79]">Salary</p>
-                <p className="text-sm font-bold text-[#071a15]">{formatSalary(job.salaryMin, job.salaryMax)}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 bg-[#f8faf9] rounded-xl p-4">
-              <MapPin size={16} className="text-[#40b594] mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79]">Location</p>
-                <p className="text-sm font-bold text-[#071a15]">{job.location}</p>
-              </div>
-            </div>
-            {job.category && (
-              <div className="flex items-start gap-3 bg-[#f8faf9] rounded-xl p-4">
-                <Briefcase size={16} className="text-[#40b594] mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79]">Category</p>
-                  <p className="text-sm font-bold text-[#071a15]">{job.category}</p>
+                <h2 className="text-xl font-extrabold text-[#071a15]">{job.title}</h2>
+                {job.companyName && (
+                  <p className="text-sm font-semibold text-[#40b594] mt-0.5">{job.companyName}</p>
+                )}
+                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                  <span className="flex items-center gap-1 text-xs text-gray-400 font-medium">
+                    <MapPin size={11} /> {job.location}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-gray-400 font-medium">
+                    <Clock size={11} /> {timeAgo(job.createdAt)}
+                  </span>
                 </div>
               </div>
-            )}
-            {job.applicationDeadline && (
-              <div className="flex items-start gap-3 bg-[#f8faf9] rounded-xl p-4">
-                <Calendar size={16} className="text-[#40b594] mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79]">Deadline</p>
-                  <p className="text-sm font-bold text-[#071a15]">
-                    {new Date(job.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all shrink-0"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+
+            {/* Summary pill — mirrors the ApplyModal job info card */}
+            <div className="bg-[#f0f9f6] border border-[#d1e8e3] rounded-xl px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm font-extrabold text-[#071a15]">{job.title}</p>
+                <p className="text-xs text-[#6b7f79] mt-0.5 font-medium">
+                  {formatSalary(job.salaryMin, job.salaryMax)}
+                  {job.arrangement && <> &middot; {formatLabel(job.arrangement)}</>}
+                  {job.location && <> &middot; {job.location}</>}
+                  {job.applicationDeadline && (
+                    <> &middot; <span className="text-amber-600 font-semibold">
+                      Due {new Date(job.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span></>
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className={"text-xs font-bold px-3 py-1 rounded-lg border " + (tagColors[tag] ?? "bg-gray-50 text-gray-600 border-gray-200")}
+                  >
+                    {formatLabel(tag)}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[#f8faf9] rounded-xl px-4 py-3 border border-gray-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79] mb-1 flex items-center gap-1">
+                  <DollarSign size={10} className="text-[#40b594]" /> Salary
+                </p>
+                <p className="text-sm font-extrabold text-[#071a15]">{formatSalary(job.salaryMin, job.salaryMax)}</p>
+              </div>
+              <div className="bg-[#f8faf9] rounded-xl px-4 py-3 border border-gray-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79] mb-1 flex items-center gap-1">
+                  <Monitor size={10} className="text-[#40b594]" /> Mode
+                </p>
+                <p className="text-sm font-extrabold text-[#071a15]">{formatLabel(job.arrangement)}</p>
+              </div>
+              <div className="bg-[#f8faf9] rounded-xl px-4 py-3 border border-gray-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79] mb-1 flex items-center gap-1">
+                  <Briefcase size={10} className="text-[#40b594]" /> Field
+                </p>
+                <p className="text-sm font-extrabold text-[#071a15] truncate">{job.category || "—"}</p>
+              </div>
+              {job.applicationDeadline ? (
+                <div className="bg-[#f8faf9] rounded-xl px-4 py-3 border border-gray-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79] mb-1 flex items-center gap-1">
+                    <Calendar size={10} className="text-[#40b594]" /> Deadline
+                  </p>
+                  <p className="text-sm font-extrabold text-[#071a15]">
+                    {new Date(job.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </p>
                 </div>
+              ) : (
+                <div className="bg-[#f8faf9] rounded-xl px-4 py-3 border border-gray-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6b7f79] mb-1 flex items-center gap-1">
+                    <MapPin size={10} className="text-[#40b594]" /> Location
+                  </p>
+                  <p className="text-sm font-extrabold text-[#071a15] truncate">{job.location}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Job Description */}
+            {job.description && (
+              <div>
+                <label className="block text-sm font-extrabold text-[#071a15] mb-2">Job Description</label>
+                <div className="bg-[#f8faf9] border border-gray-100 rounded-xl px-5 py-4">
+                  {descLines.length > 1 ? (
+                    <ul className="space-y-2">
+                      {descLines.map((line, i) => (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <CheckCircle2 size={14} className="text-[#40b594] shrink-0 mt-0.5" />
+                          <p className="text-sm text-[#4a5a55] leading-relaxed font-medium">{line}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-[#4a5a55] leading-relaxed font-medium whitespace-pre-wrap">{job.description}</p>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* Requirements */}
+            {job.requirements && (
+              <div>
+                <label className="block text-sm font-extrabold text-[#071a15] mb-2">Requirements</label>
+                <div className="bg-[#f8faf9] border border-gray-100 rounded-xl px-5 py-4">
+                  {reqLines.length > 1 ? (
+                    <ul className="space-y-2">
+                      {reqLines.map((line, i) => (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#40b594] shrink-0" />
+                          <p className="text-sm text-[#4a5a55] leading-relaxed font-medium">{line}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-[#4a5a55] leading-relaxed font-medium whitespace-pre-wrap">{job.requirements}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* About the Company */}
+            {job.companyName && (
+              <div>
+                <label className="block text-sm font-extrabold text-[#071a15] mb-2">About the Company</label>
+                <div className="flex items-start gap-4 bg-[#f8faf9] rounded-xl p-5 border border-gray-100">
+                  <div className="w-11 h-11 rounded-xl bg-[#f0f9f6] border border-[#d1e8e3] flex items-center justify-center shrink-0 overflow-hidden">
+                    {job.companyImage
+                      ? <img src={job.companyImage} alt={job.companyName} className="w-full h-full object-cover" />
+                      : <Building2 size={18} className="text-[#40b594]" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-extrabold text-[#071a15]">{job.companyName}</p>
+                    {job.companyIndustry && (
+                      <p className="text-xs font-semibold text-[#40b594] mt-0.5">{job.companyIndustry}</p>
+                    )}
+                    {job.companyDescription && (
+                      <p className="text-xs text-[#6b7f79] mt-2 leading-relaxed">{job.companyDescription}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {job.applicationPlatform === "external" && job.externalApplyLink && (
+              <a
+                href={job.externalApplyLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-bold text-[#0a7e61] hover:underline"
+              >
+                <ExternalLink size={13} /> Apply on external site
+              </a>
             )}
           </div>
 
-          {job.description && (
-            <div>
-              <h3 className="text-sm font-extrabold text-[#071a15] mb-3">Job Description</h3>
-              <div className="bg-[#f8faf9] border border-gray-100 rounded-xl px-5 py-4">
-                <p className="text-sm text-[#4a5a55] leading-relaxed whitespace-pre-wrap">{job.description}</p>
-              </div>
-            </div>
-          )}
-
-          {job.requirements && (
-            <div>
-              <h3 className="text-sm font-extrabold text-[#071a15] mb-3">Requirements</h3>
-              <div className="bg-[#f8faf9] border border-gray-100 rounded-xl px-5 py-4">
-                <p className="text-sm text-[#4a5a55] leading-relaxed whitespace-pre-wrap">{job.requirements}</p>
-              </div>
-            </div>
-          )}
-
-          {job.companyName && (
-            <div>
-              <h3 className="text-sm font-extrabold text-[#071a15] mb-3">About the Company</h3>
-              <div className="flex items-start gap-4 bg-[#f8faf9] rounded-xl p-5 border border-gray-100">
-                <div className="w-12 h-12 rounded-xl bg-[#f0f9f6] border border-[#d1e8e3] flex items-center justify-center shrink-0 overflow-hidden">
-                  {job.companyImage ? (
-                    <img src={job.companyImage} alt={job.companyName} className="w-full h-full object-cover" />
-                  ) : (
-                    <Building2 size={20} className="text-[#40b594]" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-extrabold text-[#071a15]">{job.companyName}</p>
-                  {job.companyIndustry && (
-                    <p className="text-xs font-semibold text-[#40b594] mt-0.5">{job.companyIndustry}</p>
-                  )}
-                  {job.companyDescription && (
-                    <p className="text-xs text-[#6b7f79] mt-2 leading-relaxed line-clamp-3">{job.companyDescription}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {job.applicationPlatform === "external" && job.externalApplyLink && (
-            <a href={job.externalApplyLink} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm font-bold text-[#0a7e61] hover:underline">
-              <ExternalLink size={14} />
-              Apply on external site
-            </a>
-          )}
-        </div>
-
-        <div className="px-8 py-5 border-t border-gray-100 bg-[#f8faf9] flex items-center gap-3">
-          <button
-            onClick={onSave}
-            className={"p-3 rounded-xl border transition-all " + (saved ? "bg-[#f0f9f6] border-[#c8e6dd] text-[#40b594]" : "bg-white border-gray-200 text-gray-400 hover:border-gray-300")}
-          >
-            {saved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
-          </button>
-          <button
-            onClick={onApply}
-            disabled={applied}
-            className={"flex-1 py-3 rounded-xl font-extrabold text-sm transition-all " + (applied ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-[#051612] text-white hover:bg-[#0d2a23]")}
-          >
-            {applied ? "Already Applied" : "Apply Now"}
-          </button>
+          {/* Footer */}
+          <div className="px-8 py-5 border-t border-gray-100 bg-[#f8faf9] flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={onSave}
+              className={"w-11 h-11 rounded-xl border flex items-center justify-center transition-all shrink-0 " +
+                (saved
+                  ? "bg-[#f0f9f6] border-[#c8e6dd] text-[#40b594]"
+                  : "bg-white border-gray-200 text-gray-400 hover:border-gray-300")}
+            >
+              {saved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
+            </button>
+            <button
+              onClick={onApply}
+              disabled={applied}
+              className={"flex-1 h-11 rounded-xl font-extrabold text-sm transition-all " +
+                (applied
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-[#051612] text-white hover:bg-[#0d2a23]")}
+            >
+              {applied ? "Already Applied" : "Apply Now"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
 // ── APPLY MODAL ───────────────────────────────────────────────────────────────
-function ApplyModal({
-  job,
-  onClose,
-  onSubmitted,
-}: {
-  job: Job;
-  onClose: () => void;
-  onSubmitted: () => void;
-}) {
+function ApplyModal({ job, onClose, onSubmitted }: { job: Job; onClose: () => void; onSubmitted: () => void; }) {
   const [coverLetter, setCoverLetter] = useState("");
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [applying, setApplying] = useState(false);
@@ -300,23 +408,11 @@ function ApplyModal({
       form.append("coverLetter", coverLetter);
       if (cvFile) form.append("cvFile", cvFile);
 
-      const res = await fetch("/api/applications", {
-        method: "POST",
-        body: form,
-      });
-
-      if (res.ok) {
-        onSubmitted();
-        onClose();
-      } else {
-        const data = await res.json();
-        alert(data.error ?? "Failed to apply");
-      }
-    } catch {
-      alert("Something went wrong");
-    } finally {
-      setApplying(false);
-    }
+      const res = await fetch("/api/applications", { method: "POST", body: form });
+      if (res.ok) { onSubmitted(); onClose(); }
+      else { const data = await res.json(); alert(data.error ?? "Failed to apply"); }
+    } catch { alert("Something went wrong"); }
+    finally { setApplying(false); }
   };
 
   return (
@@ -325,38 +421,21 @@ function ApplyModal({
       style={{ background: "rgba(5,22,18,0.6)", backdropFilter: "blur(2px)" }}
       onClick={onClose}
     >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <div className="px-8 py-6 border-b border-gray-100 flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-extrabold text-[#071a15]">
-              Apply: {job.title}
-            </h2>
-            {job.companyName && (
-              <p className="text-sm text-[#6b7f79] font-medium mt-0.5">
-                {job.companyName}
-              </p>
-            )}
+            <h2 className="text-xl font-extrabold text-[#071a15]">Apply: {job.title}</h2>
+            {job.companyName && <p className="text-sm text-[#6b7f79] font-medium mt-0.5">{job.companyName}</p>}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-[#6b7f79] hover:bg-gray-100"
-          >
-            <X size={20} />
-          </button>
+          <button onClick={onClose} className="p-2 rounded-xl text-[#6b7f79] hover:bg-gray-100"><X size={20} /></button>
         </div>
 
-        {/* Body */}
         <div className="p-8 space-y-5">
           <div className="bg-[#f0f9f6] border border-[#d1e8e3] rounded-xl px-5 py-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-extrabold text-[#071a15]">{job.title}</p>
               <p className="text-xs text-[#6b7f79] mt-0.5">
-                {formatSalary(job.salaryMin, job.salaryMax)} &middot;{" "}
-                {formatLabel(job.arrangement)} &middot; {job.location}
+                {formatSalary(job.salaryMin, job.salaryMax)} &middot; {formatLabel(job.arrangement)} &middot; {job.location}
               </p>
             </div>
             <span className="text-xs font-bold text-[#40b594] bg-white px-3 py-1 rounded-lg border border-[#d1e8e3]">
@@ -366,8 +445,7 @@ function ApplyModal({
 
           <div>
             <label className="block text-sm font-extrabold text-[#071a15] mb-2">
-              Cover Letter{" "}
-              <span className="text-gray-400 font-normal">(optional)</span>
+              Cover Letter <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <textarea
               rows={5}
@@ -380,25 +458,18 @@ function ApplyModal({
 
           <div>
             <label className="block text-sm font-extrabold text-[#071a15] mb-2">
-              Upload CV{" "}
-              <span className="text-gray-400 font-normal">(optional)</span>
+              Upload CV <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <label className="flex items-center gap-3 cursor-pointer border-2 border-dashed border-[#d1e8e3] rounded-xl px-4 py-3 hover:border-[#40b594] transition-all">
               <FileText size={18} className="text-[#40b594]" />
               <span className="text-sm font-medium text-[#6b7f79]">
                 {cvFile ? cvFile.name : "Click to upload PDF, DOC, DOCX"}
               </span>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => setCvFile(e.target.files?.[0] ?? null)}
-                className="hidden"
-              />
+              <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setCvFile(e.target.files?.[0] ?? null)} className="hidden" />
             </label>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-8 py-5 border-t border-gray-100 bg-[#f8faf9] flex gap-3">
           <button
             onClick={handleApply}
@@ -408,10 +479,7 @@ function ApplyModal({
             <Send size={15} />
             {applying ? "Submitting..." : "Submit Application"}
           </button>
-          <button
-            onClick={onClose}
-            className="px-6 py-3 rounded-xl font-bold text-sm border border-gray-200 text-[#6b7f79] hover:bg-gray-50"
-          >
+          <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-sm border border-gray-200 text-[#6b7f79] hover:bg-gray-50">
             Cancel
           </button>
         </div>
@@ -422,22 +490,22 @@ function ApplyModal({
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 const JobSeekerHome = () => {
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState("Most Relevant");
+  const [searchInput, setSearchInput]       = useState("");
+  const [searchQuery, setSearchQuery]       = useState("");
+  const [showFilters, setShowFilters]       = useState(false);
+  const [sortBy, setSortBy]                 = useState("Most Relevant");
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [jobListings, setJobListings] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
-  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [applyJob, setApplyJob] = useState<Job | null>(null);
+  const [jobListings, setJobListings]       = useState<Job[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [savedJobIds, setSavedJobIds]       = useState<Set<string>>(new Set());
+  const [appliedJobIds, setAppliedJobIds]   = useState<Set<string>>(new Set());
+  const [selectedJob, setSelectedJob]       = useState<Job | null>(null);
+  const [applyJob, setApplyJob]             = useState<Job | null>(null);
 
-  const [filters, setFilters] = useState({
-    jobType: "",
-    experience: "",
-    salary: "",
+  const [filters, setFilters] = useState<Filters>({
+    jobType:     "",
+    experience:  "",
+    salary:      "",
     arrangement: "",
   });
 
@@ -445,42 +513,53 @@ const JobSeekerHome = () => {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
         setActiveDropdown(null);
-      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const fetchJobs = useCallback(async () => {
-  setLoading(true);
-  try {
-    const params = new URLSearchParams();
-    if (searchQuery) params.set("search", searchQuery);
-    if (filters.jobType) params.set("employmentType", filters.jobType);
-    if (filters.arrangement) params.set("arrangement", filters.arrangement);
-    if (filters.experience) params.set("experience", filters.experience);
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (filters.jobType)
+        params.set("employmentType", jobTypeMap[filters.jobType] ?? filters.jobType);
+      if (filters.arrangement)
+        params.set("arrangement", arrangementMap[filters.arrangement] ?? filters.arrangement);
+      if (filters.experience)
+        params.set("experienceLevel", experienceMap[filters.experience] ?? filters.experience);
+      if (filters.salary) {
+        const range = salaryRangeMap[filters.salary];
+        if (range?.min !== undefined) params.set("salaryMin", String(range.min));
+        if (range?.max !== undefined) params.set("salaryMax", String(range.max));
+      }
+      params.set("status", "active");
 
-    const res = await fetch(`/api/jobs?${params.toString()}`, { cache: "no-store" });
-    const data = await res.json();
-
-    // API returns { jobs: [...], total, page, limit } — extract the array
-    if (res.ok) {
-      const jobArray = Array.isArray(data) ? data : (data.jobs ?? []);
-      setJobListings(jobArray);
+      const res  = await fetch(`/api/jobs?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        const jobArray: Job[] = Array.isArray(data) ? data : (data.jobs ?? []);
+        setJobListings(jobArray);
+      } else {
+        console.error("Jobs API error:", data);
+        setJobListings([]);
+      }
+    } catch (err) {
+      console.error("fetchJobs error:", err);
+      setJobListings([]);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-}, [searchQuery, filters]);
+  }, [searchQuery, filters]);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         const [savedRes, appliedRes] = await Promise.all([
-          fetch("/api/saved-jobs", { cache: "no-store" }),
+          fetch("/api/saved-jobs",   { cache: "no-store" }),
           fetch("/api/applications", { cache: "no-store" }),
         ]);
         if (savedRes.ok) {
@@ -492,15 +571,13 @@ const JobSeekerHome = () => {
           setAppliedJobIds(new Set((applied as any[]).map((a) => a.jobId)));
         }
       } catch (err) {
-        console.error(err);
+        console.error("fetchUserData error:", err);
       }
     };
     fetchUserData();
   }, []);
 
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+  useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
   const handleSearch = () => setSearchQuery(searchInput);
 
@@ -508,60 +585,66 @@ const JobSeekerHome = () => {
     const isSaved = savedJobIds.has(job.id);
     if (isSaved) {
       await fetch(`/api/jobs/${job.id}/save`, { method: "DELETE" });
-      setSavedJobIds((prev) => {
-        const next = new Set(prev);
-        next.delete(job.id);
-        return next;
-      });
+      setSavedJobIds((prev) => { const n = new Set(prev); n.delete(job.id); return n; });
     } else {
       await fetch(`/api/jobs/${job.id}/save`, { method: "POST" });
       setSavedJobIds((prev) => new Set([...prev, job.id]));
     }
   };
 
-  const clearFilters = () =>
-    setFilters({ jobType: "", experience: "", salary: "", arrangement: "" });
-
+  const clearFilters = () => setFilters({ jobType: "", experience: "", salary: "", arrangement: "" });
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const sortedJobs = [...(Array.isArray(jobListings) ? jobListings : [])].sort((a, b) => {
-  if (sortBy === "Newest First")
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  if (sortBy === "Highest Salary")
-    return (b.salaryMax ?? 0) - (a.salaryMax ?? 0);
-  return 0;
-});
+  const sortedJobs = [...jobListings].sort((a, b) => {
+    if (sortBy === "Newest First")
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sortBy === "Highest Salary")
+      return (b.salaryMax ?? b.salaryMin ?? 0) - (a.salaryMax ?? a.salaryMin ?? 0);
 
-  const pillFilters: { key: keyof typeof filters; label: string; options: string[] }[] = [
-    { key: "jobType", label: "Job Type", options: jobTypeOptions },
-    { key: "arrangement", label: "Work Mode", options: ["On-site", "Remote", "Hybrid"] },
-    { key: "experience", label: "Experience", options: experienceOptions },
-    { key: "salary", label: "Salary", options: salaryOptions },
+    const q = searchQuery.trim().toLowerCase();
+    const score = (j: Job): number => {
+      let s = 0;
+      if (q) {
+        if (j.title.toLowerCase().includes(q))               s += 6;
+        if ((j.companyName ?? "").toLowerCase().includes(q)) s += 3;
+        if ((j.category ?? "").toLowerCase().includes(q))    s += 2;
+        if ((j.description ?? "").toLowerCase().includes(q)) s += 1;
+      }
+      if (j.salaryMin || j.salaryMax) s += 2;
+      if (j.applicationDeadline)      s += 1;
+      return s;
+    };
+    const diff = score(b) - score(a);
+    if (diff !== 0) return diff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const pillFilters: { key: keyof Filters; label: string; options: string[] }[] = [
+    { key: "jobType",     label: "Job Type",   options: jobTypeOptions },
+    { key: "arrangement", label: "Work Mode",  options: arrangementOptions },
+    { key: "experience",  label: "Experience", options: experienceOptions },
+    { key: "salary",      label: "Salary",     options: salaryOptions },
   ];
 
   return (
     <div className="min-h-screen font-sans pb-16" style={{ background: "#f0f4f3" }}>
+
+      {/* Modals */}
       {selectedJob && (
         <JobDetailModal
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onSave={() => toggleSave(selectedJob)}
-          onApply={() => {
-            setSelectedJob(null);
-            setApplyJob(selectedJob);
-          }}
+          onApply={() => { setSelectedJob(null); setApplyJob(selectedJob); }}
           saved={savedJobIds.has(selectedJob.id)}
           applied={appliedJobIds.has(selectedJob.id)}
         />
       )}
-
       {applyJob && (
         <ApplyModal
           job={applyJob}
           onClose={() => setApplyJob(null)}
-          onSubmitted={() =>
-            setAppliedJobIds((prev) => new Set([...prev, applyJob.id]))
-          }
+          onSubmitted={() => setAppliedJobIds((prev) => new Set([...prev, applyJob.id]))}
         />
       )}
 
@@ -573,18 +656,10 @@ const JobSeekerHome = () => {
         </div>
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold">
           <button className="text-[#40b594] border-b-2 border-[#40b594] pb-1">Home</button>
-          <Link href="/saved">
-            <button className="text-gray-300 hover:text-white transition-colors">My Jobs</button>
-          </Link>
-          <Link href="/message">
-            <button className="text-gray-300 hover:text-white transition-colors">Messages</button>
-          </Link>
-          <Link href="/notification">
-            <button className="text-gray-300 hover:text-white transition-colors">Notifications</button>
-          </Link>
-          <Link href="/setting">
-            <button className="text-gray-300 hover:text-white transition-colors">Settings</button>
-          </Link>
+          <Link href="/saved"><button className="text-gray-300 hover:text-white transition-colors">My Jobs</button></Link>
+          <Link href="/message"><button className="text-gray-300 hover:text-white transition-colors">Messages</button></Link>
+          <Link href="/notification"><button className="text-gray-300 hover:text-white transition-colors">Notifications</button></Link>
+          <Link href="/setting"><button className="text-gray-300 hover:text-white transition-colors">Settings</button></Link>
         </nav>
         <UserNavProfile />
       </header>
@@ -598,9 +673,7 @@ const JobSeekerHome = () => {
               {jobListings.length} active roles
             </span>
           </div>
-          <h1 className="text-5xl font-extrabold mb-3 leading-tight tracking-tight">
-            Your Next Great Role
-          </h1>
+          <h1 className="text-5xl font-extrabold mb-3 leading-tight tracking-tight">Your Next Great Role</h1>
           <p className="text-gray-400 text-base mb-10 max-w-md leading-relaxed font-medium">
             Discover opportunities matched to your skills, experience, and career goals.
           </p>
@@ -628,12 +701,10 @@ const JobSeekerHome = () => {
           <div className="flex flex-wrap items-center gap-2.5" ref={dropdownRef}>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={
-                "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold border transition-all " +
+              className={"flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold border transition-all " +
                 (showFilters
                   ? "bg-[#40b594] border-[#40b594] text-[#051612]"
-                  : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10")
-              }
+                  : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10")}
             >
               <SlidersHorizontal size={12} />
               Filters
@@ -644,66 +715,46 @@ const JobSeekerHome = () => {
               )}
             </button>
 
-            {showFilters &&
-              pillFilters.map(({ key, label, options }) => (
-                <div key={key} className="relative">
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === key ? null : key)}
-                    className={
-                      "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold border transition-all " +
-                      (filters[key]
-                        ? "bg-[#40b594] border-[#40b594] text-[#051612]"
-                        : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10")
-                    }
-                  >
-                    {filters[key] || label}
-                    {filters[key] ? (
-                      <X
-                        size={11}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFilters((p) => ({ ...p, [key]: "" }));
-                        }}
-                      />
-                    ) : (
-                      <ChevronDown
-                        size={11}
-                        className={"transition-transform " + (activeDropdown === key ? "rotate-180" : "")}
-                      />
-                    )}
-                  </button>
-
-                  {activeDropdown === key && (
-                    <div className="absolute left-0 top-full mt-2 w-52 bg-[#0d2219] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
-                      <div className="py-1.5">
-                        {options.map((opt) => (
-                          <button
-                            key={opt}
-                            onClick={() => {
-                              setFilters((p) => ({ ...p, [key]: opt }));
-                              setActiveDropdown(null);
-                            }}
-                            className={
-                              "w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors " +
-                              (filters[key] === opt
-                                ? "bg-[#40b594]/20 text-[#40b594]"
-                                : "text-gray-300 hover:bg-white/5 hover:text-white")
-                            }
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+            {showFilters && pillFilters.map(({ key, label, options }) => (
+              <div key={key} className="relative">
+                <button
+                  onClick={() => setActiveDropdown(activeDropdown === key ? null : key)}
+                  className={"flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold border transition-all " +
+                    (filters[key]
+                      ? "bg-[#40b594] border-[#40b594] text-[#051612]"
+                      : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10")}
+                >
+                  {filters[key] || label}
+                  {filters[key] ? (
+                    <X size={11} onClick={(e) => { e.stopPropagation(); setFilters((p) => ({ ...p, [key]: "" })); }} />
+                  ) : (
+                    <ChevronDown size={11} className={"transition-transform " + (activeDropdown === key ? "rotate-180" : "")} />
                   )}
-                </div>
-              ))}
+                </button>
+
+                {activeDropdown === key && (
+                  <div className="absolute left-0 top-full mt-2 w-52 bg-[#0d2219] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    <div className="py-1.5">
+                      {options.map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setActiveDropdown(null); }}
+                          className={"w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors " +
+                            (filters[key] === opt
+                              ? "bg-[#40b594]/20 text-[#40b594]"
+                              : "text-gray-300 hover:bg-white/5 hover:text-white")}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
 
             {activeFilterCount > 0 && (
-              <button
-                onClick={clearFilters}
-                className="text-xs font-bold text-gray-500 hover:text-gray-300 transition-colors px-1"
-              >
+              <button onClick={clearFilters} className="text-xs font-bold text-gray-500 hover:text-gray-300 transition-colors px-1">
                 Clear all
               </button>
             )}
@@ -734,10 +785,7 @@ const JobSeekerHome = () => {
               <option>Newest First</option>
               <option>Highest Salary</option>
             </select>
-            <ChevronDown
-              size={13}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7f79] pointer-events-none"
-            />
+            <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7f79] pointer-events-none" />
           </div>
         </div>
 
@@ -756,15 +804,14 @@ const JobSeekerHome = () => {
               </div>
             ))}
           </div>
+
         ) : sortedJobs.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center mt-14">
             <div className="w-12 h-12 bg-[#f0f9f6] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#d1e8e3]">
               <Search size={20} className="text-[#40b594]" />
             </div>
             <h3 className="text-base font-extrabold text-[#071a15] mb-1">No jobs found</h3>
-            <p className="text-sm text-[#6b7f79] font-medium">
-              Try adjusting your search or clearing some filters.
-            </p>
+            <p className="text-sm text-[#6b7f79] font-medium">Try adjusting your search or clearing some filters.</p>
             <button
               onClick={() => { clearFilters(); setSearchQuery(""); setSearchInput(""); }}
               className="mt-5 px-6 py-2.5 bg-[#051612] text-white rounded-xl text-sm font-bold hover:bg-[#0d2a23] transition-all"
@@ -772,10 +819,11 @@ const JobSeekerHome = () => {
               Clear Filters
             </button>
           </div>
+
         ) : (
           <div className="space-y-4 mt-14">
             {sortedJobs.map((job) => {
-              const isSaved = savedJobIds.has(job.id);
+              const isSaved   = savedJobIds.has(job.id);
               const isApplied = appliedJobIds.has(job.id);
 
               return (
@@ -785,66 +833,41 @@ const JobSeekerHome = () => {
                 >
                   <div className="p-7">
                     <div className="flex items-start gap-5">
-                      {/* Company logo */}
                       <div className="w-12 h-12 rounded-xl bg-[#f0f9f6] border border-[#d1e8e3] flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
-                        {job.companyImage ? (
-                          <img src={job.companyImage} alt={job.companyName ?? ""} className="w-full h-full object-cover" />
-                        ) : (
-                          <Building2 size={20} className="text-[#40b594]" />
-                        )}
+                        {job.companyImage
+                          ? <img src={job.companyImage} alt={job.companyName ?? ""} className="w-full h-full object-cover" />
+                          : <Building2 size={20} className="text-[#40b594]" />}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        {/* Title + save button */}
                         <div className="flex items-start justify-between gap-4 mb-1">
                           <div>
-                            <h2 className="text-lg font-extrabold text-[#071a15] leading-snug">
-                              {job.title}
-                            </h2>
-                            {job.companyName && (
-                              <p className="text-sm font-semibold text-[#4a7063] mt-0.5">
-                                {job.companyName}
-                              </p>
-                            )}
+                            <h2 className="text-lg font-extrabold text-[#071a15] leading-snug">{job.title}</h2>
+                            {job.companyName && <p className="text-sm font-semibold text-[#4a7063] mt-0.5">{job.companyName}</p>}
                           </div>
                           <button
                             onClick={() => toggleSave(job)}
-                            className={
-                              "p-2 rounded-xl border transition-all shrink-0 " +
+                            className={"p-2 rounded-xl border transition-all shrink-0 " +
                               (isSaved
                                 ? "bg-[#f0f9f6] border-[#c8e6dd] text-[#40b594]"
-                                : "bg-gray-50 border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-600")
-                            }
+                                : "bg-gray-50 border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-600")}
                           >
                             {isSaved ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}
                           </button>
                         </div>
 
-                        {/* Meta row */}
                         <div className="flex items-center flex-wrap gap-4 mb-3 mt-2">
-                          <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400">
-                            <MapPin size={12} /> {job.location}
-                          </span>
-                          <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400">
-                            <Clock size={12} /> {timeAgo(job.createdAt)}
-                          </span>
+                          <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400"><MapPin size={12} /> {job.location}</span>
+                          <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400"><Clock size={12} /> {timeAgo(job.createdAt)}</span>
                           {job.applicationDeadline && (
                             <span className="text-xs font-semibold text-[#6b7f79]">
-                              Deadline:{" "}
-                              {new Date(job.applicationDeadline).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
+                              Deadline: {new Date(job.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                             </span>
                           )}
                         </div>
 
-                        <p className="text-sm text-gray-500 leading-relaxed mb-5 font-medium line-clamp-2">
-                          {job.description}
-                        </p>
+                        <p className="text-sm text-gray-500 leading-relaxed mb-5 font-medium line-clamp-2">{job.description}</p>
 
-                        {/* Bottom row */}
                         <div className="flex items-center justify-between gap-4 flex-wrap">
                           <div className="flex items-center gap-3 flex-wrap">
                             <span className="flex items-center gap-1 text-base font-extrabold text-[#071a15]">
@@ -852,19 +875,14 @@ const JobSeekerHome = () => {
                               {formatSalary(job.salaryMin, job.salaryMax)}
                             </span>
                             <div className="flex gap-1.5 flex-wrap">
-                              {([job.employmentType, job.arrangement, job.experienceLevel] as string[])
-                                .filter(Boolean)
-                                .map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className={
-                                      "text-[11px] font-bold px-2.5 py-1 rounded-md border " +
-                                      (tagColors[tag] ?? "bg-gray-50 text-gray-600 border-gray-200")
-                                    }
-                                  >
-                                    {formatLabel(tag)}
-                                  </span>
-                                ))}
+                              {([job.employmentType, job.arrangement, job.experienceLevel] as string[]).filter(Boolean).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className={"text-[11px] font-bold px-2.5 py-1 rounded-md border " + (tagColors[tag] ?? "bg-gray-50 text-gray-600 border-gray-200")}
+                                >
+                                  {formatLabel(tag)}
+                                </span>
+                              ))}
                             </div>
                           </div>
 
@@ -878,12 +896,10 @@ const JobSeekerHome = () => {
                             <button
                               onClick={() => setApplyJob(job)}
                               disabled={isApplied}
-                              className={
-                                "px-5 py-2.5 rounded-xl font-bold text-xs transition-all " +
+                              className={"px-5 py-2.5 rounded-xl font-bold text-xs transition-all " +
                                 (isApplied
                                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                  : "bg-[#051612] text-white hover:bg-[#0d2a23]")
-                              }
+                                  : "bg-[#051612] text-white hover:bg-[#0d2a23]")}
                             >
                               {isApplied ? "Applied" : "Apply Now"}
                             </button>

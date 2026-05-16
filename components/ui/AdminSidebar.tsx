@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Building2, FileText,
-  CreditCard, Radio, MessageSquare, LogOut, Loader2,
+  CreditCard, Radio, MessageSquare, LogOut, Loader2, Bell,
 } from "lucide-react";
 
 const sidebarItems = [
@@ -15,20 +15,45 @@ const sidebarItems = [
   { name: "Subscription", icon: CreditCard, href: "/admin_subscription" },
   { name: "Broadcast", icon: Radio, href: "/broadcast" },
   { name: "Messages", icon: MessageSquare, href: "/admin_message" },
+  { name: "Notifications", icon: Bell, href: "/admin_notifications" },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [pendingPayments, setPendingPayments] = useState(0);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+
+  useEffect(() => {
+    // Poll pending payments count every 30 seconds
+    const fetchCounts = async () => {
+      try {
+        const [paymentsRes, notifsRes] = await Promise.all([
+          fetch("/api/admin/payment"),
+          fetch("/api/admin/my-notifications/count"),
+        ]);
+        if (paymentsRes.ok) {
+          const payments = await paymentsRes.json();
+          setPendingPayments(Array.isArray(payments) ? payments.filter((p: any) => p.status === "pending").length : 0);
+        }
+        if (notifsRes.ok) {
+          const { count } = await notifsRes.json();
+          setUnreadNotifs(count || 0);
+        }
+      } catch (e) { /* ignore */ }
+    };
+
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSignOut = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
       await fetch("/api/admin/auth/logout", { method: "POST" });
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
     window.location.replace("/login");
   };
 
@@ -49,6 +74,12 @@ export default function AdminSidebar() {
         {sidebarItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
+
+          // Badge count for each item
+          const badge =
+            item.href === "/admin_subscription" ? pendingPayments :
+            item.href === "/admin_notifications" ? unreadNotifs : 0;
+
           return (
             <Link
               key={item.name}
@@ -60,7 +91,14 @@ export default function AdminSidebar() {
               }`}
             >
               <Icon size={17} />
-              {item.name}
+              <span className="flex-1">{item.name}</span>
+              {badge > 0 && (
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                  isActive ? "bg-[#0d1f1a] text-[#00ffa3]" : "bg-amber-500 text-white"
+                }`}>
+                  {badge}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -83,15 +121,9 @@ export default function AdminSidebar() {
           className="w-full bg-red-500/10 text-red-400 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-red-500/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loggingOut ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              Signing out...
-            </>
+            <><Loader2 size={15} className="animate-spin" />Signing out...</>
           ) : (
-            <>
-              <LogOut size={15} />
-              Sign Out
-            </>
+            <><LogOut size={15} />Sign Out</>
           )}
         </button>
       </div>

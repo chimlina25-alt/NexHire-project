@@ -239,30 +239,79 @@ const EmployerDashboard = () => {
 
   async function fetchAll() {
     try {
-      const [statsRes, jobsRes, applicantsRes, profileRes] = await Promise.all([
-        fetch("/api/employer/stats"),
+      // Run all four fetches in parallel
+      const [statsRes, recentJobsRes, applicantsRes, profileRes] = await Promise.all([
+        fetch("/api/dashboard/stats"),
+        // Returns ALL employer jobs (active + draft + closed) with applicant counts
         fetch("/api/employer/recent-jobs"),
+        // Returns the 20 most recent applicants with seekerEmail already joined
         fetch("/api/employer/applicants"),
         fetch("/api/employer/profile"),
       ]);
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (jobsRes.ok) setJobs(await jobsRes.json());
-      if (applicantsRes.ok) setApplicants(await applicantsRes.json());
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats({
+          totalJobs: data.totalJobs ?? 0,
+          activeJobs: data.activeJobs ?? 0,
+          totalApplicants: data.totalApplicants ?? 0,
+        });
+      }
+
+      if (recentJobsRes.ok) {
+        const allJobs: any[] = await recentJobsRes.json();
+        // Non-draft jobs → main table; draft jobs → Drafts panel
+        setJobs(
+          allJobs
+            .filter((j) => j.status !== "draft")
+            .map((j) => ({ ...j, applicantCount: j.applicants ?? 0 }))
+        );
+        // Use updatedAt as the "deleted at" timestamp for display in the panel
+        setDraftJobs(
+          allJobs
+            .filter((j) => j.status === "draft")
+            .map((j) => ({ ...j, deletedAt: j.updatedAt ?? j.createdAt }))
+        );
+      }
+
+      if (applicantsRes.ok) {
+        const data: any[] = await applicantsRes.json();
+        setApplicants(data);
+      }
+
       if (profileRes.ok) setProfile(await profileRes.json());
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  // DB status values the decision endpoint actually writes:
+  // "review"  → sets DB to "interview"  (displayed as "Under Review")
+  // "reject"  → sets DB to "rejected"
+  // "accept"  → sets DB to "accepted"
+  // "pending" stays "pending" (initial state)
+  // "archived"/"withdrawn" are filtered out by /api/employer/applicants already
+  const applicantStatusStyle: Record<string, string> = {
+    pending:   'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+    interview: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+    accepted:  'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+    rejected:  'bg-red-50 text-red-700 ring-1 ring-red-200',
+  };
+
+  // Map raw DB values to human-readable labels
+  const applicantStatusLabel: Record<string, string> = {
+    pending:   'Pending',
+    interview: 'Under Review',
+    accepted:  'Accepted',
+    rejected:  'Rejected',
+  };
 
   const statusStyle: Record<string, string> = {
     active: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
     closed: 'bg-red-50 text-red-700 ring-1 ring-red-200',
-    draft: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
-  };
-  const applicantStatusStyle: Record<string, string> = {
-    pending: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-    interview: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
-    accepted: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-    rejected: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+    draft:  'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
   };
 
   const openEditPanel = (job: any) => {
@@ -270,7 +319,14 @@ const EmployerDashboard = () => {
     setEditForm({ title: job.title, category: job.category, location: job.location, description: job.description, arrangement: job.arrangement, employmentType: job.employmentType, requirements: job.requirements || "" });
     setPanelMode("edit"); setPanelOpen(true);
   };
-  const openApplicantDetails = (applicant: any) => { setSelectedApplicant(applicant); setPanelMode("view_applicant"); setPanelOpen(true); };
+
+  const openApplicantDetails = (applicant: any) => {
+    setSelectedApplicant(applicant);
+    setPanelMode("view_applicant");
+    setPanelOpen(true);
+  };
+
+  // DELETE /api/jobs/[jobId] → backend soft-deletes by setting status = "draft"
   const handleDeleteJob = async (jobId: string) => {
     const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
     if (res.ok) {
@@ -279,16 +335,33 @@ const EmployerDashboard = () => {
       setJobs(prev => prev.filter(j => j.id !== jobId));
     }
   };
-  const handleRestoreJob = (job: any) => {
-    const { deletedAt, ...restoredJob } = job;
-    setJobs(prev => [restoredJob, ...prev]);
-    setDraftJobs(prev => prev.filter(d => d.id !== job.id));
+
+  // PATCH /api/jobs/[jobId] { status: "active" } → restores job from draft
+  const handleRestoreJob = async (job: any) => {
+    const res = await fetch(`/api/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "active" }),
+    });
+    if (res.ok) {
+      const { deletedAt, ...restoredJob } = job;
+      setJobs(prev => [{ ...restoredJob, status: "active" }, ...prev]);
+      setDraftJobs(prev => prev.filter(d => d.id !== job.id));
+    }
   };
+
+  // No permanent-delete endpoint exists in the backend — frontend-only removal
   const handlePermanentDelete = (jobId: string) => setDraftJobs(prev => prev.filter(d => d.id !== jobId));
+
+  // PATCH /api/jobs/[jobId] with full editForm fields
   const handleSaveJob = async () => {
     if (!selectedJob) return;
     setSaving(true);
-    const res = await fetch(`/api/jobs/${selectedJob.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) });
+    const res = await fetch(`/api/jobs/${selectedJob.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editForm),
+    });
     if (res.ok) {
       const updated = await res.json();
       setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, ...updated } : j));
@@ -296,17 +369,25 @@ const EmployerDashboard = () => {
     }
     setSaving(false);
   };
+
+  // POST /api/applications/[applicationId]/decision
+  // The backend handles the DB update AND fires the notification to the seeker —
+  // no separate notification call is needed from the frontend.
   const handleDecision = async (decision: string, interviewData?: any) => {
     if (!selectedApplicant) return;
     const body: any = { decision, ...interviewData };
-    const res = await fetch(`/api/applications/${selectedApplicant.id}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(`/api/applications/${selectedApplicant.id}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
     if (res.ok) {
       const data = await res.json();
-      setApplicants(prev => prev.map(a => a.id === selectedApplicant.id ? { ...a, status: data.status } : a));
-      setSelectedApplicant((p: any) => ({ ...p, status: data.status }));
-      if (decision === "accept") { setShowInterviewModal(false); alert("Interview scheduled! Notification sent to applicant."); }
-      else if (decision === "reject") alert("Applicant rejected. Notification sent.");
-      else if (decision === "review") alert("Application marked as under review. Applicant notified.");
+      // Use the status the backend returns directly — it's the real DB value
+      const newStatus = data.status ?? selectedApplicant.status;
+      setApplicants(prev => prev.map(a => a.id === selectedApplicant.id ? { ...a, status: newStatus } : a));
+      setSelectedApplicant((p: any) => ({ ...p, status: newStatus }));
+      if (decision === "accept") setShowInterviewModal(false);
     }
   };
 
@@ -318,11 +399,21 @@ const EmployerDashboard = () => {
   return (
     <div className="min-h-screen font-sans pb-16 relative overflow-hidden" style={{ background: '#f0f4f3' }}>
       {showInterviewModal && selectedApplicant && (
-        <InterviewModal applicant={selectedApplicant} onClose={() => setShowInterviewModal(false)} onSchedule={async (data) => { await handleDecision("accept", data); }} />
+        <InterviewModal
+          applicant={selectedApplicant}
+          onClose={() => setShowInterviewModal(false)}
+          onSchedule={async (data) => { await handleDecision("accept", data); }}
+        />
       )}
       {draftsPanelOpen && (
-        <DraftsPanel drafts={draftJobs} onClose={() => setDraftsPanelOpen(false)} onRestore={handleRestoreJob} onPermanentDelete={handlePermanentDelete} />
+        <DraftsPanel
+          drafts={draftJobs}
+          onClose={() => setDraftsPanelOpen(false)}
+          onRestore={handleRestoreJob}
+          onPermanentDelete={handlePermanentDelete}
+        />
       )}
+
       <div className={`fixed inset-0 z-[100] transition-all duration-300 ${panelOpen ? "opacity-100 visible" : "opacity-0 invisible"}`}>
         <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setPanelOpen(false)} />
         <div className={`absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl overflow-hidden transform transition-transform duration-300 ${panelOpen ? "translate-x-0" : "translate-x-full"}`}>
@@ -380,7 +471,9 @@ const EmployerDashboard = () => {
                   )}
                   <div className="bg-[#f8faf9] p-4 rounded-xl">
                     <p className="text-xs font-black text-[#6b7f79] uppercase mb-1">Current Status</p>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${applicantStatusStyle[selectedApplicant?.status] ?? 'bg-gray-100'}`}>{selectedApplicant?.status}</span>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${applicantStatusStyle[selectedApplicant?.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {applicantStatusLabel[selectedApplicant?.status] ?? selectedApplicant?.status}
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -570,7 +663,11 @@ const EmployerDashboard = () => {
                   </td>
                   <td className="px-4 py-5 text-[#4a5a55] text-sm font-medium">{a.jobTitle}</td>
                   <td className="px-4 py-5 text-[#6b7f79] text-sm">{new Date(a.appliedAt).toLocaleDateString()}</td>
-                  <td className="px-4 py-5"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${applicantStatusStyle[a.status] ?? 'bg-gray-100'}`}>{a.status}</span></td>
+                  <td className="px-4 py-5">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${applicantStatusStyle[a.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {applicantStatusLabel[a.status] ?? a.status}
+                    </span>
+                  </td>
                   <td className="px-4 py-5 text-right pr-8">
                     <button onClick={() => openApplicantDetails(a)} className="text-xs font-black text-[#40b594] hover:bg-[#f0f9f6] px-3 py-1.5 rounded-lg transition-all">View →</button>
                   </td>

@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ next: "/admin_dashboard" });
     }
 
-    // ── Regular user login (your existing logic unchanged) ──────
+    // ── Regular user login ──────────────────────────────────────
     const [user] = await db
       .select()
       .from(users)
@@ -94,6 +94,23 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
+
+    // ++ ADDED — suspension check
+    if (
+      !user.isEmailVerified &&
+      !user.onboardingCompleted &&
+      user.role !== null
+    ) {
+      return NextResponse.json(
+        {
+          error: "suspended",
+          message:
+            "Your account has been suspended by an administrator. Please contact support for assistance.",
+        },
+        { status: 403 }
+      );
+    }
+    // ++ END ADDED
 
     const code = await createOtp({
       email,

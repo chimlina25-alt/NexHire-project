@@ -49,6 +49,18 @@ export async function GET(req: Request) {
       );
     }
 
+    // ++ ADDED — suspended check for Google login
+    if (
+      !existingUser.isEmailVerified &&
+      !existingUser.onboardingCompleted &&
+      existingUser.role !== null
+    ) {
+      return NextResponse.redirect(
+        new URL("/login?error=suspended", req.url)
+      );
+    }
+    // ++ END ADDED
+
     const code = await createOtp({
       email,
       purpose: "google_login",

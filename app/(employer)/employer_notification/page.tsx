@@ -155,7 +155,7 @@ const Notifications = () => {
         <EmployerNavProfile />
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 md:px-10 py-10">
+      <main className="max-w-4xl mx-auto px-8 py-10">
         {/* Page header */}
         <div className="flex justify-between items-start mb-10">
           <div>

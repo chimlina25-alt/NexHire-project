@@ -7,7 +7,6 @@ import { createHash } from "crypto";
 import { and, gt } from "drizzle-orm";
 import { sessions, users } from "@/app/db/schema";
 
-// Helper inline to avoid import issues
 async function getCurrentUser() {
   try {
     const cookieStore = await cookies();
@@ -79,11 +78,9 @@ export async function GET(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    // Check if requester is the employer who owns this job
     const user = await getCurrentUser();
     const isOwner = user && user.id === job.employerId;
 
-    // Block non-owners from seeing closed/draft jobs
     if (job.status !== "active" && !isOwner) {
       return NextResponse.json(
         { error: "This job posting is no longer available" },
@@ -170,10 +167,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Soft delete: set to closed so employees can no longer see it
+    // Soft delete: set to "draft" — hides from dashboard Recent Jobs
+    // but can be restored to "active" via the Drafts panel
     await db
       .update(jobs)
-      .set({ status: "closed", updatedAt: new Date() })
+      .set({ status: "draft", updatedAt: new Date() })
       .where(eq(jobs.id, jobId));
 
     return NextResponse.json({ success: true });

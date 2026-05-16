@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { eq, or, ilike } from "drizzle-orm";
+import { eq, ilike, or } from "drizzle-orm";
 import { db } from "@/app/db";
 import {
-  users, jobSeekerProfiles, employerProfiles, adminConversations, adminMessages
+  users,
+  jobSeekerProfiles,
+  employerProfiles,
+  adminConversations,
+  adminMessages,
 } from "@/app/db/schema";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { desc } from "drizzle-orm";
@@ -12,11 +16,10 @@ export async function GET(req: Request) {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const q = (searchParams.get("q") || "").trim().toLowerCase();
-
+  const q = (searchParams.get("q") || "").trim();
   if (!q) return NextResponse.json([]);
 
-  // Search job seeker profiles by name
+  // Search job seeker profiles by first/last name
   const seekers = await db
     .select({
       userId: jobSeekerProfiles.userId,
@@ -25,10 +28,12 @@ export async function GET(req: Request) {
       profileImage: jobSeekerProfiles.profileImage,
     })
     .from(jobSeekerProfiles)
-    .where(or(
-      ilike(jobSeekerProfiles.firstName, `%${q}%`),
-      ilike(jobSeekerProfiles.lastName, `%${q}%`),
-    ))
+    .where(
+      or(
+        ilike(jobSeekerProfiles.firstName, `%${q}%`),
+        ilike(jobSeekerProfiles.lastName, `%${q}%`)
+      )
+    )
     .limit(10);
 
   // Search employer profiles by company name
@@ -45,12 +50,20 @@ export async function GET(req: Request) {
   const results: any[] = [];
 
   for (const s of seekers) {
-    const [existing] = await db.select().from(adminConversations)
-      .where(eq(adminConversations.userId, s.userId)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(adminConversations)
+      .where(eq(adminConversations.userId, s.userId))
+      .limit(1);
 
-    const [lastMsg] = existing ? await db.select().from(adminMessages)
-      .where(eq(adminMessages.conversationId, existing.id))
-      .orderBy(desc(adminMessages.createdAt)).limit(1) : [null];
+    const [lastMsg] = existing
+      ? await db
+          .select()
+          .from(adminMessages)
+          .where(eq(adminMessages.conversationId, existing.id))
+          .orderBy(desc(adminMessages.createdAt))
+          .limit(1)
+      : [null];
 
     results.push({
       id: existing?.id || `new_${s.userId}`,
@@ -67,12 +80,20 @@ export async function GET(req: Request) {
   }
 
   for (const e of employers) {
-    const [existing] = await db.select().from(adminConversations)
-      .where(eq(adminConversations.userId, e.userId)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(adminConversations)
+      .where(eq(adminConversations.userId, e.userId))
+      .limit(1);
 
-    const [lastMsg] = existing ? await db.select().from(adminMessages)
-      .where(eq(adminMessages.conversationId, existing.id))
-      .orderBy(desc(adminMessages.createdAt)).limit(1) : [null];
+    const [lastMsg] = existing
+      ? await db
+          .select()
+          .from(adminMessages)
+          .where(eq(adminMessages.conversationId, existing.id))
+          .orderBy(desc(adminMessages.createdAt))
+          .limit(1)
+      : [null];
 
     results.push({
       id: existing?.id || `new_${e.userId}`,

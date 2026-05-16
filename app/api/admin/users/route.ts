@@ -43,15 +43,27 @@ export async function GET(req: Request) {
       );
     }
 
+    // ++ FIXED — helper to resolve status correctly
+    // Suspended = both flags false + role is set (was previously onboarded)
+    // Active    = both flags true
+    // Inactive  = not yet verified/onboarded (new signup in progress)
+    const resolveStatus = (u: typeof allUsers[number]) => {
+      if (!u.isEmailVerified && !u.onboardingCompleted && u.role !== null) {
+        return "Suspended";
+      }
+      if (u.isEmailVerified && u.onboardingCompleted) {
+        return "Active";
+      }
+      return "Inactive";
+    };
+
     // Filter by status
     if (filter === "Active") {
-      filtered = filtered.filter(
-        (u) => u.isEmailVerified && u.onboardingCompleted
-      );
+      filtered = filtered.filter((u) => resolveStatus(u) === "Active");
     } else if (filter === "Inactive") {
-      filtered = filtered.filter(
-        (u) => !u.isEmailVerified || !u.onboardingCompleted
-      );
+      filtered = filtered.filter((u) => resolveStatus(u) === "Inactive");
+    } else if (filter === "Suspended") {
+      filtered = filtered.filter((u) => resolveStatus(u) === "Suspended");
     }
 
     // Add application counts
@@ -62,13 +74,10 @@ export async function GET(req: Request) {
           .from(jobApplications)
           .where(eq(jobApplications.jobSeekerId, u.id));
 
-        const status =
-          u.isEmailVerified && u.onboardingCompleted ? "Active" : "Inactive";
-
         return {
           ...u,
           name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
-          status,
+          status: resolveStatus(u), // ++ FIXED — use resolveStatus
           applications: Number(appCount.count),
         };
       })

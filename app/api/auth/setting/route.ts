@@ -1,22 +1,17 @@
-// app/api/auth/setting/route.ts
-// FULL REPLACEMENT — handles password change, email update, account deletion
-
 import { NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { users, sessions, jobApplications, savedJobs, notifications, conversations, messages } from "@/app/db/schema";
-import { getCurrentUser, hashPassword, comparePassword } from "@/lib/auth";
+import {
+  users, sessions, jobApplications, savedJobs, notifications,
+} from "@/app/db/schema";
+import { getCurrentUser, hashPassword, comparePassword, createOtp, verifyOtp } from "@/lib/auth";
+import { sendOtpEmail } from "@/lib/email";
 import { cookies } from "next/headers";
 
 export async function GET() {
-  // Return current user's email for settings page
   const user = await getCurrentUser("auth");
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  return NextResponse.json({
-    email: user.email,
-    role: user.role,
-  });
+  return NextResponse.json({ email: user.email, role: user.role });
 }
 
 export async function POST(req: Request) {
@@ -33,11 +28,9 @@ export async function POST(req: Request) {
     if (!currentPassword || !newPassword) {
       return NextResponse.json({ error: "Both passwords are required" }, { status: 400 });
     }
-
     if (newPassword.length < 8) {
       return NextResponse.json({ error: "New password must be at least 8 characters" }, { status: 400 });
     }
-
     if (!user.passwordHash) {
       return NextResponse.json({ error: "Account uses Google sign-in — password change not available" }, { status: 400 });
     }
@@ -53,7 +46,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, message: "Password updated successfully" });
   }
 
-  // ── Update email ─────────────────────────────────────────────────────────
+  // ── Update email — step 1: send OTP to new email ─────────────────────────
   if (action === "update_email") {
     const { newEmail } = body;
 
@@ -63,7 +56,71 @@ export async function POST(req: Request) {
 
     const normalised = newEmail.toLowerCase().trim();
 
-    // Check not already taken
+    if (normalised === user.email) {
+      return NextResponse.json(
+        { error: "New email is the same as your current email" },
+        { status: 400 }
+      );
+    }
+
+    // ++ TIGHTENED — check all existing accounts with this email
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, normalised))
+      .limit(1);
+
+    if (existing) {
+      // It belongs to a different account — block regardless of provider
+      if (!existing.passwordHash && existing.googleId) {
+        return NextResponse.json(
+          { error: "This email is already registered via Google on another account." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "This email is already in use by another account." },
+        { status: 409 }
+      );
+    }
+
+    const code = await createOtp({
+      email: normalised,
+      purpose: "forgot_password",
+      data: { userId: user.id, newEmail: normalised },
+    });
+
+    await sendOtpEmail(normalised, code, "Verify your new NexHire email address");
+
+    return NextResponse.json({
+      success: true,
+      message: "Verification code sent to your new email address.",
+      requiresVerification: true,
+      newEmail: normalised,
+    });
+  }
+
+  // ── Update email — step 2: verify OTP and apply the change ───────────────
+  if (action === "verify_email_change") {
+    const { newEmail, code } = body;
+
+    if (!newEmail || !code) {
+      return NextResponse.json({ error: "Email and verification code are required" }, { status: 400 });
+    }
+
+    const normalised = newEmail.toLowerCase().trim();
+
+    const record = await verifyOtp({
+      email: normalised,
+      code,
+      purpose: "forgot_password",
+    });
+
+    if (!record) {
+      return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 });
+    }
+
+    // ++ Race condition guard — re-check after OTP verified
     const [existing] = await db
       .select()
       .from(users)
@@ -71,7 +128,16 @@ export async function POST(req: Request) {
       .limit(1);
 
     if (existing && existing.id !== user.id) {
-      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+      if (!existing.passwordHash && existing.googleId) {
+        return NextResponse.json(
+          { error: "This email is already registered via Google on another account." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "This email is already in use by another account." },
+        { status: 409 }
+      );
     }
 
     await db
@@ -84,14 +150,12 @@ export async function POST(req: Request) {
 
   // ── Delete account ────────────────────────────────────────────────────────
   if (action === "delete_account") {
-    // Delete in safe order to avoid FK violations
     await db.delete(notifications).where(eq(notifications.recipientId, user.id));
     await db.delete(savedJobs).where(eq(savedJobs.jobSeekerId, user.id));
     await db.delete(jobApplications).where(eq(jobApplications.jobSeekerId, user.id));
     await db.delete(sessions).where(eq(sessions.userId, user.id));
     await db.delete(users).where(eq(users.id, user.id));
 
-    // Clear session cookie
     const cookieStore = await cookies();
     cookieStore.delete("session_token");
 

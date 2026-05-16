@@ -4,9 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useState } from "react"; // ++ ADDED
 import Link from "next/link";
 import FormInput from "@/components/ui/FormInput";
 import { signIn } from "next-auth/react";
+import { ShieldOff } from "lucide-react"; // ++ ADDED
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -19,6 +21,7 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const googleError = searchParams.get("error");
+  const [suspended, setSuspended] = useState(false); // ++ ADDED
 
   const {
     register,
@@ -31,6 +34,8 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
+      setSuspended(false); // ++ ADDED
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
@@ -43,6 +48,12 @@ export default function LoginPage() {
       const result = text ? JSON.parse(text) : {};
 
       if (!res.ok) {
+        // ++ ADDED
+        if (result.error === "suspended") {
+          setSuspended(true);
+          return;
+        }
+        // ++ END ADDED
         setError("email", {
           message: result.error || "Login failed",
         });
@@ -56,6 +67,10 @@ export default function LoginPage() {
       });
     }
   };
+
+  // ++ ADDED — treat googleError=suspended same as password suspended
+  const isSuspended = suspended || googleError === "suspended";
+  // ++ END ADDED
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#1a1a1a] px-4 py-4 md:px-8">
@@ -100,7 +115,28 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {googleError && (
+              {/* ++ ADDED — suspension banner (covers both password + Google login) */}
+              {isSuspended && (
+                <div className="mb-5 rounded-2xl bg-red-50 border border-red-100 px-4 py-4 flex gap-3">
+                  <div className="flex-shrink-0 w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center">
+                    <ShieldOff size={16} className="text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-extrabold text-red-700">Account Suspended</p>
+                    <p className="text-xs text-red-500 font-medium mt-0.5 leading-relaxed">
+                      Your account has been suspended by an administrator. Please contact{" "}
+                      <a href="mailto:support@nexhire.com" className="underline font-bold">
+                        support@nexhire.com
+                      </a>{" "}
+                      for assistance.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {/* ++ END ADDED */}
+
+              {/* ++ MODIFIED — only show googleError banner when it's not suspended */}
+              {googleError && googleError !== "suspended" && (
                 <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
                   Google login error: {googleError}
                 </div>

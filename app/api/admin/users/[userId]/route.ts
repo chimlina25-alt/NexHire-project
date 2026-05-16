@@ -11,6 +11,7 @@ import {
   adminConversations,
 } from "@/app/db/schema";
 import { getCurrentAdmin } from "@/lib/admin-auth";
+import { sendSuspensionEmail, sendAccountDeletedEmail, sendReactivationEmail } from "@/lib/email"; // ++ ADDED sendReactivationEmail
 
 export async function GET(
   _req: Request,
@@ -62,16 +63,13 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (body.status === "suspended") {
-      // Kill all sessions so they are immediately logged out
       await db.delete(sessions).where(eq(sessions.userId, userId));
 
-      // Mark as suspended
       await db
         .update(users)
         .set({ isEmailVerified: false, onboardingCompleted: false, updatedAt: new Date() })
         .where(eq(users.id, userId));
 
-      // Send suspension notification to the job seeker
       await db.insert(notifications).values({
         recipientId: userId,
         type: "system",
@@ -81,14 +79,19 @@ export async function PATCH(
         link: null,
         meta: { adminAction: "account_suspended" } as Record<string, unknown>,
       });
+
+      try {
+        await sendSuspensionEmail(user.email);
+      } catch (emailErr) {
+        console.error("Failed to send suspension email:", emailErr);
+      }
+
     } else if (body.status === "active") {
-      // Restore the account
       await db
         .update(users)
         .set({ isEmailVerified: true, onboardingCompleted: true, updatedAt: new Date() })
         .where(eq(users.id, userId));
 
-      // Send reactivation notification to the job seeker
       await db.insert(notifications).values({
         recipientId: userId,
         type: "system",
@@ -98,6 +101,14 @@ export async function PATCH(
         link: "/home_page",
         meta: { adminAction: "account_activated" } as Record<string, unknown>,
       });
+
+      // ++ ADDED
+      try {
+        await sendReactivationEmail(user.email);
+      } catch (emailErr) {
+        console.error("Failed to send reactivation email:", emailErr);
+      }
+      // ++ END ADDED
     }
 
     return NextResponse.json({ success: true });
@@ -125,37 +136,18 @@ export async function DELETE(
 
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Delete in correct dependency order
+    try {
+      await sendAccountDeletedEmail(user.email);
+    } catch (emailErr) {
+      console.error("Failed to send account deleted email:", emailErr);
+    }
 
-    // 1. Kill all sessions
     await db.delete(sessions).where(eq(sessions.userId, userId));
-
-    // 2. Delete saved jobs
-    await db
-      .delete(savedJobs)
-      .where(eq(savedJobs.jobSeekerId, userId));
-
-    // 3. Delete job applications
-    await db
-      .delete(jobApplications)
-      .where(eq(jobApplications.jobSeekerId, userId));
-
-    // 4. Delete admin conversations
-    await db
-      .delete(adminConversations)
-      .where(eq(adminConversations.userId, userId));
-
-    // 5. Delete notifications for this user
-    await db
-      .delete(notifications)
-      .where(eq(notifications.recipientId, userId));
-
-    // 6. Delete job seeker profile
-    await db
-      .delete(jobSeekerProfiles)
-      .where(eq(jobSeekerProfiles.userId, userId));
-
-    // 7. Delete the user account itself
+    await db.delete(savedJobs).where(eq(savedJobs.jobSeekerId, userId));
+    await db.delete(jobApplications).where(eq(jobApplications.jobSeekerId, userId));
+    await db.delete(adminConversations).where(eq(adminConversations.userId, userId));
+    await db.delete(notifications).where(eq(notifications.recipientId, userId));
+    await db.delete(jobSeekerProfiles).where(eq(jobSeekerProfiles.userId, userId));
     await db.delete(users).where(eq(users.id, userId));
 
     return NextResponse.json({ success: true });

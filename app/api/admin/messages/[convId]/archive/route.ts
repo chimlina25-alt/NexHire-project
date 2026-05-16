@@ -10,15 +10,12 @@ export async function POST(
 ) {
   const admin = await getCurrentAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { convId } = await params;
 
-  await db.update(adminConversations)
+  await db
+    .update(adminConversations)
     .set({ archived: true })
-    .where(and(
-      eq(adminConversations.id, convId),
-      eq(adminConversations.adminId, admin.id)
-    ));
+    .where(and(eq(adminConversations.id, convId), eq(adminConversations.adminId, admin.id)));
 
   return NextResponse.json({ success: true });
 }
@@ -29,15 +26,12 @@ export async function DELETE(
 ) {
   const admin = await getCurrentAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { convId } = await params;
 
-  await db.update(adminConversations)
+  await db
+    .update(adminConversations)
     .set({ archived: false })
-    .where(and(
-      eq(adminConversations.id, convId),
-      eq(adminConversations.adminId, admin.id)
-    ));
+    .where(and(eq(adminConversations.id, convId), eq(adminConversations.adminId, admin.id)));
 
   return NextResponse.json({ success: true });
 }
