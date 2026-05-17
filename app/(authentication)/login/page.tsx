@@ -4,11 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react"; // ++ ADDED
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import FormInput from "@/components/ui/FormInput";
 import { signIn } from "next-auth/react";
-import { ShieldOff } from "lucide-react"; // ++ ADDED
+import { ShieldOff } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -17,11 +17,11 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const googleError = searchParams.get("error");
-  const [suspended, setSuspended] = useState(false); // ++ ADDED
+  const [suspended, setSuspended] = useState(false);
 
   const {
     register,
@@ -34,7 +34,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      setSuspended(false); // ++ ADDED
+      setSuspended(false);
 
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -48,12 +48,10 @@ export default function LoginPage() {
       const result = text ? JSON.parse(text) : {};
 
       if (!res.ok) {
-        // ++ ADDED
         if (result.error === "suspended") {
           setSuspended(true);
           return;
         }
-        // ++ END ADDED
         setError("email", {
           message: result.error || "Login failed",
         });
@@ -68,9 +66,7 @@ export default function LoginPage() {
     }
   };
 
-  // ++ ADDED — treat googleError=suspended same as password suspended
   const isSuspended = suspended || googleError === "suspended";
-  // ++ END ADDED
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#1a1a1a] px-4 py-4 md:px-8">
@@ -115,7 +111,6 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {/* ++ ADDED — suspension banner (covers both password + Google login) */}
               {isSuspended && (
                 <div className="mb-5 rounded-2xl bg-red-50 border border-red-100 px-4 py-4 flex gap-3">
                   <div className="flex-shrink-0 w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center">
@@ -133,9 +128,7 @@ export default function LoginPage() {
                   </div>
                 </div>
               )}
-              {/* ++ END ADDED */}
 
-              {/* ++ MODIFIED — only show googleError banner when it's not suspended */}
               {googleError && googleError !== "suspended" && (
                 <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
                   Google login error: {googleError}
@@ -204,5 +197,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
