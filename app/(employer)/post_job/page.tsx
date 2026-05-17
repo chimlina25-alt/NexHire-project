@@ -2,24 +2,10 @@
 
 import React, { useState } from "react";
 import {
-  Clock,
-  FileEdit,
-  Trash2,
-  Briefcase,
-  PlusCircle,
-  ChevronDown,
-  CheckCircle,
-  X,
-  AlertCircle,
-  MapPin,
-  DollarSign,
-  Calendar,
-  Tag,
-  Monitor,
-  Mail,
-  Link2,
-  Users,
-  Layers,
+  Clock, FileEdit, Trash2, Briefcase, PlusCircle,
+  ChevronDown, CheckCircle, X, AlertCircle, MapPin,
+  DollarSign, Calendar, Tag, Monitor, Mail, Link2,
+  Users, Layers,
 } from "lucide-react";
 import Link from "next/link";
 import EmployerNavProfile from "@/components/ui/EmployerNavProfile";
@@ -106,7 +92,6 @@ type FullDraftJob = {
   status: string; createdAt: string; postedAt: string | null;
 };
 
-// Converts DB snake_case values back to display labels for the form selects
 function toArrangementLabel(val: string) {
   return val === "on_site" ? "On-site" : val === "remote" ? "Remote" : val === "hybrid" ? "Hybrid" : "";
 }
@@ -146,7 +131,6 @@ function DraftViewModal({ draft, onClose, onEditDraft }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(5,22,18,0.55)", backdropFilter: "blur(2px)" }} onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="px-8 py-6 border-b border-gray-100 flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3] shrink-0">
@@ -163,7 +147,6 @@ function DraftViewModal({ draft, onClose, onEditDraft }: {
           <button onClick={onClose} className="p-2 rounded-xl text-[#6b7f79] hover:bg-gray-100 hover:text-[#071a15] transition-all shrink-0"><X size={20} /></button>
         </div>
 
-        {/* Body */}
         <div className="overflow-y-auto flex-1 px-8 py-6 space-y-7">
           <div className="grid grid-cols-2 gap-4">
             <InfoRow icon={<MapPin size={14} className="text-[#40b594]" />} label="Location" value={draft.location} />
@@ -196,7 +179,6 @@ function DraftViewModal({ draft, onClose, onEditDraft }: {
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-between bg-[#f8faf9] rounded-b-2xl">
           <p className="text-xs font-semibold text-[#6b7f79]">
             <Clock size={12} className="inline mr-1 mb-0.5" />
@@ -204,7 +186,6 @@ function DraftViewModal({ draft, onClose, onEditDraft }: {
           </p>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-bold text-[#6b7f79] hover:text-[#071a15] transition-all">Close</button>
-            {/* Edit Draft now calls onEditDraft to pre-fill the form */}
             <button
               onClick={() => onEditDraft(draft)}
               className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all"
@@ -226,6 +207,8 @@ const emptyForm = {
   contactEmail: "", status: "active",
 };
 
+const planLimits: Record<string, number> = { free: 1, standard: 3, premium: 7 };
+
 const PostJob = () => {
   const { toasts, show, remove } = useToast();
   const [activeTab, setActiveTab] = useState<"post" | "drafts">("post");
@@ -236,8 +219,10 @@ const PostJob = () => {
   const [form, setForm] = useState(emptyForm);
   const [viewingDraft, setViewingDraft] = useState<FullDraftJob | null>(null);
   const [draftFetchLoading, setDraftFetchLoading] = useState(false);
-  // Track which draft is being edited so we can PATCH instead of POST
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+
+  // ++ Subscription info
+  const [subInfo, setSubInfo] = useState<{ plan: string; used: number; limit: number } | null>(null);
 
   const inputClass = "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all";
   const selectClass = "w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all appearance-none";
@@ -247,7 +232,25 @@ const PostJob = () => {
   const employmentValue = form.employmentType === "Full-time" ? "full_time" : form.employmentType === "Part-time" ? "part_time" : form.employmentType === "Contract" ? "contract" : form.employmentType === "Freelance" ? "freelance" : form.employmentType === "Internship" ? "internship" : "full_time";
   const experienceValue = form.experienceLevel === "Entry Level" ? "entry" : form.experienceLevel === "Mid Level" ? "mid" : form.experienceLevel === "Senior" ? "senior" : form.experienceLevel === "Lead / Manager" ? "lead" : form.experienceLevel === "Executive" ? "executive" : "entry";
 
-  // Pre-fill form from a draft and switch to Post tab
+  // ++ Load subscription info
+  const loadSubInfo = () => {
+    fetch("/api/subcription")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          const plan = d.plan || "free";
+          const isExpired = d.billingCycleEnd ? new Date(d.billingCycleEnd) < new Date() : false;
+          const effectivePlan = isExpired ? "free" : plan;
+          setSubInfo({
+            plan: effectivePlan,
+            used: d.jobsPostedThisMonth ?? 0,
+            limit: planLimits[effectivePlan] ?? 1,
+          });
+        }
+      })
+      .catch(() => {});
+  };
+
   const handleEditDraft = (draft: FullDraftJob) => {
     setForm({
       title: draft.title ?? "",
@@ -297,19 +300,31 @@ const PostJob = () => {
         status,
       };
 
-      // If editing an existing draft, PATCH it; otherwise POST new
       const res = editingDraftId
         ? await fetch(`/api/jobs/${editingDraftId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 
       const data = await res.json();
-      if (!res.ok) { show(data.error ?? "Failed to save job. Please try again.", "error"); return; }
+
+      if (!res.ok) {
+        // ++ Handle limit reached
+        if (data.limitReached) {
+          show(data.error, "error");
+          loadSubInfo(); // refresh count
+          return;
+        }
+        show(data.error ?? "Failed to save job. Please try again.", "error");
+        return;
+      }
 
       show(status === "active" ? "Job published successfully!" : "Draft saved successfully!", "success");
       setForm(emptyForm);
       setEditingDraftId(null);
-      await loadDrafts();
 
+      // Refresh sub info after publish
+      if (status === "active") loadSubInfo();
+
+      await loadDrafts();
       if (status === "draft") setActiveTab("drafts");
     } catch {
       show("Something went wrong. Please try again.", "error");
@@ -319,30 +334,30 @@ const PostJob = () => {
   };
 
   const loadDrafts = async () => {
-  try {
-    setDraftLoading(true);
-    const res = await fetch("/api/jobs?mine=1", { cache: "no-store" });
-    const data = await res.json();
-    if (!res.ok) return;
+    try {
+      setDraftLoading(true);
+      const res = await fetch("/api/jobs?mine=1", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) return;
 
-    const allJobs = Array.isArray(data) ? data : (data.jobs ?? []);
+      const allJobs = Array.isArray(data) ? data : (data.jobs ?? []);
+      const drafts = allJobs
+        .filter((job: { status: string }) => job.status === "draft")
+        .map((job: { id: string; title: string; category: string; postedAt: string; createdAt: string }) => ({
+          id: job.id,
+          title: job.title,
+          category: job.category,
+          lastSaved: new Date(job.postedAt ?? job.createdAt).toLocaleString(),
+        }));
 
-    const drafts = allJobs
-      .filter((job: { status: string }) => job.status === "draft")
-      .map((job: { id: string; title: string; category: string; postedAt: string; createdAt: string }) => ({
-        id: job.id,
-        title: job.title,
-        category: job.category,
-        lastSaved: new Date(job.postedAt ?? job.createdAt).toLocaleString(),
-      }));
+      setDraftData(drafts);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDraftLoading(false);
+    }
+  };
 
-    setDraftData(drafts);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setDraftLoading(false);
-  }
-};
   const handleViewDraft = async (jobId: string) => {
     try {
       setDraftFetchLoading(true);
@@ -363,7 +378,6 @@ const PostJob = () => {
       const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
       if (res.ok) {
         setDraftData((prev) => prev.filter((d) => d.id !== jobId));
-        // If currently editing this draft, clear the form
         if (editingDraftId === jobId) { setForm(emptyForm); setEditingDraftId(null); }
         show("Draft deleted.", "success");
       } else {
@@ -376,14 +390,17 @@ const PostJob = () => {
     }
   };
 
-  // Load drafts on mount so the count is correct from the start
   React.useEffect(() => {
     loadDrafts();
+    loadSubInfo(); // ++ load sub on mount
   }, []);
 
   React.useEffect(() => {
     if (activeTab === "drafts") loadDrafts();
+    if (activeTab === "post") loadSubInfo(); // ++ refresh when switching to post tab
   }, [activeTab]);
+
+  const limitReached = subInfo !== null && subInfo.used >= subInfo.limit;
 
   return (
     <div className="min-h-screen font-sans pb-16" style={{ background: "#f0f4f3" }}>
@@ -435,159 +452,223 @@ const PostJob = () => {
         </div>
 
         {activeTab === "post" && (
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="lg:w-2/3 space-y-6">
-              {/* Editing banner */}
-              {editingDraftId && (
-                <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center border border-amber-200">
-                      <FileEdit size={15} className="text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-extrabold text-amber-800">Editing a saved draft</p>
-                      <p className="text-xs font-semibold text-amber-600 mt-0.5">Changes will update the existing draft when saved, or publish it directly.</p>
-                    </div>
+          <>
+            {/* ++ Subscription usage banner */}
+            {subInfo && (
+              <div className={`mb-6 rounded-2xl border px-6 py-4 flex items-center justify-between ${
+                limitReached
+                  ? "bg-red-50 border-red-200"
+                  : subInfo.used === subInfo.limit - 1
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-[#f0f9f6] border-[#d1e8e3]"
+              }`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    limitReached ? "bg-red-100" :
+                    subInfo.used === subInfo.limit - 1 ? "bg-amber-100" : "bg-[#d1e8e3]"
+                  }`}>
+                    <Briefcase size={18} className={
+                      limitReached ? "text-red-600" :
+                      subInfo.used === subInfo.limit - 1 ? "text-amber-600" : "text-[#40b594]"
+                    } />
                   </div>
-                  <button onClick={() => { setForm(emptyForm); setEditingDraftId(null); }}
-                    className="text-xs font-bold text-amber-600 hover:text-amber-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-100">
-                    Cancel Edit
-                  </button>
+                  <div>
+                    <p className={`text-sm font-extrabold ${
+                      limitReached ? "text-red-700" :
+                      subInfo.used === subInfo.limit - 1 ? "text-amber-700" : "text-[#071a15]"
+                    }`}>
+                      {limitReached
+                        ? `Monthly limit reached — ${subInfo.used}/${subInfo.limit} posts used`
+                        : `${subInfo.limit - subInfo.used} slot${subInfo.limit - subInfo.used !== 1 ? "s" : ""} remaining this month`
+                      }
+                    </p>
+                    <p className={`text-xs font-medium mt-0.5 ${
+                      limitReached ? "text-red-500" :
+                      subInfo.used === subInfo.limit - 1 ? "text-amber-500" : "text-[#6b7f79]"
+                    }`}>
+                      {subInfo.used} / {subInfo.limit} used · {subInfo.plan.charAt(0).toUpperCase() + subInfo.plan.slice(1)} plan
+                    </p>
+                  </div>
                 </div>
-              )}
+                {limitReached && (
+                  <Link href="/subscription">
+                    <button className="px-4 py-2 bg-[#051612] text-white text-xs font-extrabold rounded-xl hover:bg-[#0d2a23] transition-all flex-shrink-0">
+                      Upgrade Plan
+                    </button>
+                  </Link>
+                )}
+              </div>
+            )}
 
-              <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <div className="flex items-center gap-3 mb-7">
-                  <div className="w-8 h-8 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3]">
-                    <Briefcase size={16} className="text-[#40b594]" />
+            <div className="flex flex-col lg:flex-row gap-6">
+              <div className="lg:w-2/3 space-y-6">
+                {/* Editing banner */}
+                {editingDraftId && (
+                  <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center border border-amber-200">
+                        <FileEdit size={15} className="text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-extrabold text-amber-800">Editing a saved draft</p>
+                        <p className="text-xs font-semibold text-amber-600 mt-0.5">Changes will update the existing draft when saved, or publish it directly.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => { setForm(emptyForm); setEditingDraftId(null); }}
+                      className="text-xs font-bold text-amber-600 hover:text-amber-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-100">
+                      Cancel Edit
+                    </button>
                   </div>
-                  <h2 className="text-lg font-extrabold text-[#071a15]">Job Details</h2>
-                </div>
-                <div className="space-y-6">
-                  <div>
-                    <label className={labelClass}>Job Title <span className="text-red-500">*</span></label>
-                    <input type="text" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Senior Frontend Developer" className={inputClass} />
+                )}
+
+                <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-7">
+                    <div className="w-8 h-8 bg-[#f0f9f6] rounded-xl flex items-center justify-center border border-[#d1e8e3]">
+                      <Briefcase size={16} className="text-[#40b594]" />
+                    </div>
+                    <h2 className="text-lg font-extrabold text-[#071a15]">Job Details</h2>
                   </div>
-                  <div>
-                    <label className={labelClass}>Job Category <span className="text-red-500">*</span></label>
-                    <Combobox placeholder="e.g. Design, Marketing, IT & Software" options={categoryOptions} inputClass={inputClass} value={form.category} onChange={(value) => setForm((p) => ({ ...p, category: value }))} />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-6">
                     <div>
-                      <label className={labelClass}>Location <span className="text-red-500">*</span></label>
-                      <Combobox placeholder="e.g. Phnom Penh, Remote" options={locationOptions} inputClass={inputClass} value={form.location} onChange={(value) => setForm((p) => ({ ...p, location: value }))} />
+                      <label className={labelClass}>Job Title <span className="text-red-500">*</span></label>
+                      <input type="text" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Senior Frontend Developer" className={inputClass} />
                     </div>
-                    <div className="relative">
-                      <label className={labelClass}>Work Arrangement</label>
-                      <select value={form.arrangement} onChange={(e) => setForm((p) => ({ ...p, arrangement: e.target.value }))} className={selectClass}>
-                        <option value="">On-site / Remote / Hybrid</option>
-                        <option>On-site</option><option>Remote</option><option>Hybrid</option>
-                      </select>
-                      <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="relative">
-                      <label className={labelClass}>Employment Type</label>
-                      <select value={form.employmentType} onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value }))} className={selectClass}>
-                        <option value="">Select type</option>
-                        <option>Full-time</option><option>Part-time</option><option>Contract</option><option>Freelance</option><option>Internship</option>
-                      </select>
-                      <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
-                    </div>
-                    <div className="relative">
-                      <label className={labelClass}>Experience Level</label>
-                      <select value={form.experienceLevel} onChange={(e) => setForm((p) => ({ ...p, experienceLevel: e.target.value }))} className={selectClass}>
-                        <option value="">Select level</option>
-                        <option>Entry Level</option><option>Mid Level</option><option>Senior</option><option>Lead / Manager</option><option>Executive</option>
-                      </select>
-                      <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className={labelClass}>Salary Minimum</label>
+                      <label className={labelClass}>Job Category <span className="text-red-500">*</span></label>
+                      <Combobox placeholder="e.g. Design, Marketing, IT & Software" options={categoryOptions} inputClass={inputClass} value={form.category} onChange={(value) => setForm((p) => ({ ...p, category: value }))} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className={labelClass}>Location <span className="text-red-500">*</span></label>
+                        <Combobox placeholder="e.g. Phnom Penh, Remote" options={locationOptions} inputClass={inputClass} value={form.location} onChange={(value) => setForm((p) => ({ ...p, location: value }))} />
+                      </div>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79] font-bold text-sm">$</span>
-                        <input type="number" value={form.salaryMin} onChange={(e) => setForm((p) => ({ ...p, salaryMin: e.target.value }))} placeholder="0" className={`${inputClass} pl-8`} />
+                        <label className={labelClass}>Work Arrangement</label>
+                        <select value={form.arrangement} onChange={(e) => setForm((p) => ({ ...p, arrangement: e.target.value }))} className={selectClass}>
+                          <option value="">On-site / Remote / Hybrid</option>
+                          <option>On-site</option><option>Remote</option><option>Hybrid</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="relative">
+                        <label className={labelClass}>Employment Type</label>
+                        <select value={form.employmentType} onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value }))} className={selectClass}>
+                          <option value="">Select type</option>
+                          <option>Full-time</option><option>Part-time</option><option>Contract</option><option>Freelance</option><option>Internship</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
+                      </div>
+                      <div className="relative">
+                        <label className={labelClass}>Experience Level</label>
+                        <select value={form.experienceLevel} onChange={(e) => setForm((p) => ({ ...p, experienceLevel: e.target.value }))} className={selectClass}>
+                          <option value="">Select level</option>
+                          <option>Entry Level</option><option>Mid Level</option><option>Senior</option><option>Lead / Manager</option><option>Executive</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className={labelClass}>Salary Minimum</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79] font-bold text-sm">$</span>
+                          <input type="number" value={form.salaryMin} onChange={(e) => setForm((p) => ({ ...p, salaryMin: e.target.value }))} placeholder="0" className={`${inputClass} pl-8`} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Salary Maximum</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79] font-bold text-sm">$</span>
+                          <input type="number" value={form.salaryMax} onChange={(e) => setForm((p) => ({ ...p, salaryMax: e.target.value }))} placeholder="0" className={`${inputClass} pl-8`} />
+                        </div>
                       </div>
                     </div>
                     <div>
-                      <label className={labelClass}>Salary Maximum</label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7f79] font-bold text-sm">$</span>
-                        <input type="number" value={form.salaryMax} onChange={(e) => setForm((p) => ({ ...p, salaryMax: e.target.value }))} placeholder="0" className={`${inputClass} pl-8`} />
+                      <label className={labelClass}>Application Deadline</label>
+                      <input type="date" value={form.applicationDeadline} onChange={(e) => setForm((p) => ({ ...p, applicationDeadline: e.target.value }))} className={inputClass} />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                  <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Job Description <span className="text-red-500">*</span></h2>
+                  <p className="text-xs text-[#6b7f79] font-semibold mb-5">Describe the role, responsibilities, and what success looks like</p>
+                  <textarea rows={10} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Write the job description here..." className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none" />
+                </section>
+              </div>
+
+              <div className="lg:w-1/3 space-y-6">
+                <section className="bg-white p-7 rounded-2xl shadow-sm border border-gray-100">
+                  <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Requirements</h2>
+                  <p className="text-xs text-[#6b7f79] font-semibold mb-5">Skills, qualifications, and must-haves</p>
+                  <textarea rows={8} value={form.requirements} onChange={(e) => setForm((p) => ({ ...p, requirements: e.target.value }))} placeholder="e.g. 3+ years React experience" className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none" />
+                </section>
+
+                <section className="bg-white p-7 rounded-2xl shadow-sm border border-gray-100">
+                  <h2 className="text-lg font-extrabold text-[#071a15] mb-6">Application Settings</h2>
+                  <div className="space-y-5">
+                    <div className="relative">
+                      <label className={labelClass}>Application Platform</label>
+                      <select value={form.applicationPlatform} onChange={(e) => setForm((p) => ({ ...p, applicationPlatform: e.target.value }))} className={selectClass}>
+                        <option value="">Select platform</option>
+                        <option value="internal">Apply on NexHire</option>
+                        <option value="external">External Link</option>
+                      </select>
+                      <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>External Link</label>
+                      <input type="text" value={form.externalApplyLink} onChange={(e) => setForm((p) => ({ ...p, externalApplyLink: e.target.value }))} placeholder="https://yoursite.com/apply" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Contact Email</label>
+                      <input type="email" value={form.contactEmail} onChange={(e) => setForm((p) => ({ ...p, contactEmail: e.target.value }))} placeholder="careers@company.com" className={inputClass} />
+                    </div>
+                    <div className="pt-2">
+                      <label className="block text-sm font-extrabold text-[#071a15] mb-3">Visibility</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {["Public Now", "Save as Draft"].map((opt) => (
+                          <label key={opt} className="flex items-center gap-2.5 bg-[#f8faf9] border border-gray-200 rounded-xl px-4 py-3 cursor-pointer hover:border-[#40b594] transition-all">
+                            <input type="radio" name="status" checked={opt === "Public Now" ? form.status === "active" : form.status === "draft"} onChange={() => setForm((p) => ({ ...p, status: opt === "Public Now" ? "active" : "draft" }))} className="accent-[#40b594] w-4 h-4" />
+                            <span className="text-sm font-bold text-[#071a15]">{opt}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
                   </div>
-                  <div>
-                    <label className={labelClass}>Application Deadline</label>
-                    <input type="date" value={form.applicationDeadline} onChange={(e) => setForm((p) => ({ ...p, applicationDeadline: e.target.value }))} className={inputClass} />
+                  <div className="border-t border-gray-100 my-6" />
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleSubmit("active")}
+                      disabled={loading || limitReached}
+                      className={`w-full py-3.5 rounded-xl font-extrabold text-sm transition-all shadow-sm ${
+                        limitReached
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : "bg-[#051612] text-white hover:bg-[#0d2a23]"
+                      } disabled:opacity-60`}
+                    >
+                      {loading ? "Publishing..." : limitReached ? "Limit Reached — Upgrade Plan" : "Publish Job"}
+                    </button>
+                    <button
+                      onClick={() => handleSubmit("draft")}
+                      disabled={loading}
+                      className="w-full bg-[#f0f4f3] text-[#071a15] py-3.5 rounded-xl font-extrabold text-sm border border-[#d1e8e3] hover:bg-[#d1e8e3] transition-all disabled:opacity-60"
+                    >
+                      {loading ? "Saving..." : "Save as Draft"}
+                    </button>
+                    <button
+                      onClick={() => { setForm(emptyForm); setEditingDraftId(null); }}
+                      className="w-full text-[#6b7f79] py-2 rounded-xl font-bold text-sm hover:text-[#071a15] transition-all"
+                    >
+                      Clear Form
+                    </button>
                   </div>
-                </div>
-              </section>
-
-              <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Job Description <span className="text-red-500">*</span></h2>
-                <p className="text-xs text-[#6b7f79] font-semibold mb-5">Describe the role, responsibilities, and what success looks like</p>
-                <textarea rows={10} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Write the job description here..." className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none" />
-              </section>
+                </section>
+              </div>
             </div>
-
-            <div className="lg:w-1/3 space-y-6">
-              <section className="bg-white p-7 rounded-2xl shadow-sm border border-gray-100">
-                <h2 className="text-lg font-extrabold text-[#071a15] mb-2">Requirements</h2>
-                <p className="text-xs text-[#6b7f79] font-semibold mb-5">Skills, qualifications, and must-haves</p>
-                <textarea rows={8} value={form.requirements} onChange={(e) => setForm((p) => ({ ...p, requirements: e.target.value }))} placeholder="e.g. 3+ years React experience" className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-[#f8faf9] text-[#071a15] text-sm font-medium placeholder-[#9ab0aa] focus:outline-none focus:ring-2 focus:ring-[#40b594]/30 focus:border-[#40b594] transition-all resize-none" />
-              </section>
-
-              <section className="bg-white p-7 rounded-2xl shadow-sm border border-gray-100">
-                <h2 className="text-lg font-extrabold text-[#071a15] mb-6">Application Settings</h2>
-                <div className="space-y-5">
-                  <div className="relative">
-                    <label className={labelClass}>Application Platform</label>
-                    <select value={form.applicationPlatform} onChange={(e) => setForm((p) => ({ ...p, applicationPlatform: e.target.value }))} className={selectClass}>
-                      <option value="">Select platform</option>
-                      <option value="internal">Apply on NexHire</option>
-                      <option value="external">External Link</option>
-                    </select>
-                    <ChevronDown size={16} className="absolute right-4 top-[42px] text-[#6b7f79] pointer-events-none" />
-                  </div>
-                  <div>
-                    <label className={labelClass}>External Link</label>
-                    <input type="text" value={form.externalApplyLink} onChange={(e) => setForm((p) => ({ ...p, externalApplyLink: e.target.value }))} placeholder="https://yoursite.com/apply" className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Contact Email</label>
-                    <input type="email" value={form.contactEmail} onChange={(e) => setForm((p) => ({ ...p, contactEmail: e.target.value }))} placeholder="careers@company.com" className={inputClass} />
-                  </div>
-                  <div className="pt-2">
-                    <label className="block text-sm font-extrabold text-[#071a15] mb-3">Visibility</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {["Public Now", "Save as Draft"].map((opt) => (
-                        <label key={opt} className="flex items-center gap-2.5 bg-[#f8faf9] border border-gray-200 rounded-xl px-4 py-3 cursor-pointer hover:border-[#40b594] transition-all">
-                          <input type="radio" name="status" checked={opt === "Public Now" ? form.status === "active" : form.status === "draft"} onChange={() => setForm((p) => ({ ...p, status: opt === "Public Now" ? "active" : "draft" }))} className="accent-[#40b594] w-4 h-4" />
-                          <span className="text-sm font-bold text-[#071a15]">{opt}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t border-gray-100 my-6" />
-                <div className="space-y-3">
-                  <button onClick={() => handleSubmit("active")} disabled={loading} className="w-full bg-[#051612] text-white py-3.5 rounded-xl font-extrabold text-sm hover:bg-[#0d2a23] transition-all shadow-sm disabled:opacity-60">
-                    {loading ? "Publishing..." : "Publish Job"}
-                  </button>
-                  <button onClick={() => handleSubmit("draft")} disabled={loading} className="w-full bg-[#f0f4f3] text-[#071a15] py-3.5 rounded-xl font-extrabold text-sm border border-[#d1e8e3] hover:bg-[#d1e8e3] transition-all disabled:opacity-60">
-                    {loading ? "Saving..." : "Save as Draft"}
-                  </button>
-                  <button onClick={() => { setForm(emptyForm); setEditingDraftId(null); }} className="w-full text-[#6b7f79] py-2 rounded-xl font-bold text-sm hover:text-[#071a15] transition-all">
-                    Clear Form
-                  </button>
-                </div>
-              </section>
-            </div>
-          </div>
+          </>
         )}
 
         {activeTab === "drafts" && (
@@ -641,12 +722,18 @@ const PostJob = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => handleDeleteDraft(draft.id)} disabled={deletingId === draft.id}
-                        className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40" title="Delete draft">
+                      <button
+                        onClick={() => handleDeleteDraft(draft.id)}
+                        disabled={deletingId === draft.id}
+                        className="p-2.5 rounded-xl text-[#6b7f79] hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
+                        title="Delete draft"
+                      >
                         <Trash2 size={18} />
                       </button>
-                      <button onClick={() => handleViewDraft(draft.id)}
-                        className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all">
+                      <button
+                        onClick={() => handleViewDraft(draft.id)}
+                        className="flex items-center gap-2 bg-[#051612] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0d2a23] transition-all"
+                      >
                         <FileEdit size={16} />
                         View Draft
                       </button>

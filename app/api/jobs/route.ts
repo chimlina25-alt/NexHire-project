@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { eq, desc, and, gt, or, ilike, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gt, or, ilike, gte, lte, count } from "drizzle-orm";
 import { db } from "@/app/db";
-import { jobs, employerProfiles, sessions, users } from "@/app/db/schema";
+import { jobs, employerProfiles, sessions, users, subscriptions } from "@/app/db/schema";
 import { createHash } from "crypto";
 import { cookies } from "next/headers";
 
@@ -40,7 +40,6 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const mine = searchParams.get("mine");
 
-    // ── Employer: fetch their own jobs (all statuses including drafts) ────────
     if (mine === "1") {
       const userId = await getEmployerIdFromRequest();
       if (!userId) {
@@ -56,33 +55,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ jobs: myJobs, total: myJobs.length });
     }
 
-    // ── Public: active jobs with all filters applied in SQL ───────────────────
-    const search         = searchParams.get("search")?.trim() ?? "";
-    const category       = searchParams.get("category")?.trim() ?? "";
-    const arrangement    = searchParams.get("arrangement")?.trim() ?? "";
-    const employmentType = searchParams.get("employmentType")?.trim() ?? "";
+    const search          = searchParams.get("search")?.trim() ?? "";
+    const category        = searchParams.get("category")?.trim() ?? "";
+    const arrangement     = searchParams.get("arrangement")?.trim() ?? "";
+    const employmentType  = searchParams.get("employmentType")?.trim() ?? "";
     const experienceLevel = searchParams.get("experienceLevel")?.trim() ?? "";
-    const salaryMin      = searchParams.get("salaryMin") ? Number(searchParams.get("salaryMin")) : null;
-    const salaryMax      = searchParams.get("salaryMax") ? Number(searchParams.get("salaryMax")) : null;
-    const page           = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
-    const limit          = Math.min(100, parseInt(searchParams.get("limit") ?? "20"));
-    const offset         = (page - 1) * limit;
+    const salaryMin       = searchParams.get("salaryMin") ? Number(searchParams.get("salaryMin")) : null;
+    const salaryMax       = searchParams.get("salaryMax") ? Number(searchParams.get("salaryMax")) : null;
+    const page            = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
+    const limit           = Math.min(100, parseInt(searchParams.get("limit") ?? "20"));
+    const offset          = (page - 1) * limit;
 
-    // Build WHERE conditions — always start with status = active
     const conditions = [eq(jobs.status, "active")];
 
-    // Exact-match enum filters
-    if (arrangement)    conditions.push(eq(jobs.arrangement,    arrangement    as any));
-    if (employmentType) conditions.push(eq(jobs.employmentType, employmentType as any));
+    if (arrangement)     conditions.push(eq(jobs.arrangement,     arrangement     as any));
+    if (employmentType)  conditions.push(eq(jobs.employmentType,  employmentType  as any));
     if (experienceLevel) conditions.push(eq(jobs.experienceLevel, experienceLevel as any));
-    if (category)       conditions.push(ilike(jobs.category, category));
-
-    // Salary range — match jobs whose range overlaps the requested range.
-    // A job matches if it has no salary (negotiable) OR its salary overlaps.
+    if (category)        conditions.push(ilike(jobs.category, category));
     if (salaryMin !== null) conditions.push(gte(jobs.salaryMax, salaryMin));
     if (salaryMax !== null) conditions.push(lte(jobs.salaryMin, salaryMax));
 
-    // Full-text search across title, category, location, and company name
     if (search) {
       const pattern = `%${search}%`;
       conditions.push(
@@ -90,7 +82,6 @@ export async function GET(req: Request) {
           ilike(jobs.title,    pattern),
           ilike(jobs.category, pattern),
           ilike(jobs.location, pattern),
-          // companyName lives on employerProfiles — handled via the join below
           ilike(employerProfiles.companyName, pattern),
         )!
       );
@@ -152,32 +143,106 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const {
-      title,
-      category,
-      location,
-      arrangement,
-      employmentType,
-      experienceLevel,
-      salaryMin,
-      salaryMax,
-      applicationDeadline,
-      description,
-      requirements,
-      applicationPlatform,
-      externalApplyLink,
-      contactEmail,
-      status,
+      title, category, location, arrangement, employmentType,
+      experienceLevel, salaryMin, salaryMax, applicationDeadline,
+      description, requirements, applicationPlatform,
+      externalApplyLink, contactEmail, status,
     } = body;
 
-    if (!title?.trim())
-      return NextResponse.json({ error: "Title is required." }, { status: 400 });
-    if (!category?.trim())
-      return NextResponse.json({ error: "Category is required." }, { status: 400 });
-    if (!location?.trim())
-      return NextResponse.json({ error: "Location is required." }, { status: 400 });
-    if (!description?.trim())
-      return NextResponse.json({ error: "Description is required." }, { status: 400 });
+    if (!title?.trim())       return NextResponse.json({ error: "Title is required." }, { status: 400 });
+    if (!category?.trim())    return NextResponse.json({ error: "Category is required." }, { status: 400 });
+    if (!location?.trim())    return NextResponse.json({ error: "Location is required." }, { status: 400 });
+    if (!description?.trim()) return NextResponse.json({ error: "Description is required." }, { status: 400 });
 
+    // ++ SUBSCRIPTION LIMIT CHECK
+    // Only check when posting as active (not draft)
+    if (status === "active") {
+      // Get employer subscription
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.employerId, userId))
+        .limit(1);
+
+      const planLimits: Record<string, number> = {
+        free: 1,
+        standard: 3,
+        premium: 7,
+      };
+
+      const plan = sub?.plan ?? "free";
+      const limit = planLimits[plan] ?? 1;
+      const used = sub?.jobsPostedThisMonth ?? 0;
+
+      // Check if subscription is still valid for paid plans
+      const isExpired = sub?.billingCycleEnd
+        ? new Date(sub.billingCycleEnd) < new Date()
+        : false;
+
+      const effectivePlan = isExpired ? "free" : plan;
+      const effectiveLimit = planLimits[effectivePlan] ?? 1;
+      const effectiveUsed = sub?.jobsPostedThisMonth ?? 0;
+
+      if (effectiveUsed >= effectiveLimit) {
+        return NextResponse.json(
+          {
+            error: `You've reached your monthly job post limit (${effectiveLimit} post${effectiveLimit !== 1 ? "s" : ""} for the ${effectivePlan} plan). ${effectivePlan === "free" ? "Upgrade your plan to post more jobs." : "Wait for next billing cycle or upgrade your plan."}`,
+            limitReached: true,
+            plan: effectivePlan,
+            limit: effectiveLimit,
+            used: effectiveUsed,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Insert job
+      const [newJob] = await db
+        .insert(jobs)
+        .values({
+          employerId:          userId,
+          title:               title.trim(),
+          category:            category.trim(),
+          location:            location.trim(),
+          arrangement:         arrangement    ?? "on_site",
+          employmentType:      employmentType ?? "full_time",
+          experienceLevel:     experienceLevel ?? "entry",
+          salaryMin:           salaryMin       ?? null,
+          salaryMax:           salaryMax       ?? null,
+          applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
+          description:         description.trim(),
+          requirements:        requirements?.trim() ?? null,
+          applicationPlatform: applicationPlatform || "internal",
+          externalApplyLink:   externalApplyLink   || null,
+          contactEmail:        contactEmail        || null,
+          status:              "active",
+          postedAt:            new Date(),
+        })
+        .returning();
+
+      // ++ Increment jobsPostedThisMonth
+      if (sub) {
+        await db
+          .update(subscriptions)
+          .set({
+            jobsPostedThisMonth: effectiveUsed + 1,
+            updatedAt: new Date(),
+          })
+          .where(eq(subscriptions.employerId, userId));
+      } else {
+        // Create free subscription record and set count to 1
+        await db.insert(subscriptions).values({
+          employerId: userId,
+          plan: "free",
+          jobsPostedThisMonth: 1,
+          billingCycleStart: new Date(),
+        });
+      }
+
+      return NextResponse.json(newJob, { status: 201 });
+    }
+
+    // Draft — no limit check needed
     const [newJob] = await db
       .insert(jobs)
       .values({
@@ -185,23 +250,24 @@ export async function POST(req: Request) {
         title:               title.trim(),
         category:            category.trim(),
         location:            location.trim(),
-        arrangement:         arrangement       ?? "on_site",
-        employmentType:      employmentType    ?? "full_time",
-        experienceLevel:     experienceLevel   ?? "entry",
-        salaryMin:           salaryMin         ?? null,
-        salaryMax:           salaryMax         ?? null,
+        arrangement:         arrangement    ?? "on_site",
+        employmentType:      employmentType ?? "full_time",
+        experienceLevel:     experienceLevel ?? "entry",
+        salaryMin:           salaryMin       ?? null,
+        salaryMax:           salaryMax       ?? null,
         applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
         description:         description.trim(),
         requirements:        requirements?.trim() ?? null,
-        applicationPlatform: applicationPlatform  || "internal",
-        externalApplyLink:   externalApplyLink    || null,
-        contactEmail:        contactEmail         || null,
-        status:              status               ?? "draft",
-        postedAt:            status === "active" ? new Date() : null,
+        applicationPlatform: applicationPlatform || "internal",
+        externalApplyLink:   externalApplyLink   || null,
+        contactEmail:        contactEmail        || null,
+        status:              "draft",
+        postedAt:            null,
       })
       .returning();
 
     return NextResponse.json(newJob, { status: 201 });
+
   } catch (error) {
     console.error("JOBS POST ERROR:", error);
     return NextResponse.json(

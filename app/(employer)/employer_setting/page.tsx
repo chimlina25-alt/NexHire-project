@@ -79,12 +79,16 @@ const EmployerSettings = () => {
   }, []);
 
   const fetchSub = () => {
-    setSubLoading(true);
-    fetch("/api/subscription")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) setCurrentSub(d); })
-      .finally(() => setSubLoading(false));
-  };
+  setSubLoading(true);
+  fetch("/api/subcription", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => { 
+      console.log("Sub data:", d);
+      if (d) setCurrentSub(d); 
+    })
+    .catch(err => console.error("fetchSub error:", err))
+    .finally(() => setSubLoading(false));
+};
 
   useEffect(() => { if (activeTab === "subscription") fetchSub(); }, [activeTab]);
 
@@ -563,11 +567,17 @@ const EmployerSettings = () => {
             {/* ══ Subscription Tab ══ — identical to original */}
             {activeTab === "subscription" && (
   <div className="space-y-5">
-    {/* Current membership card */}
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-8 py-6">
-        <h2 className="text-lg font-extrabold text-[#071a15]">Your Membership</h2>
-        <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">Current plan status and billing details</p>
+      <div className="border-b border-gray-100 px-8 py-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-extrabold text-[#071a15]">Your Membership</h2>
+          <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">Current plan and billing details</p>
+        </div>
+        {currentSub && currentSub.plan !== "free" && (
+          <span className="flex items-center gap-1.5 text-xs font-bold text-[#40b594] bg-[#f0f9f6] px-3 py-1.5 rounded-xl border border-[#d1e8e3]">
+            <span className="w-2 h-2 rounded-full bg-[#40b594] animate-pulse" /> Active
+          </span>
+        )}
       </div>
       <div className="p-8">
         {subLoading ? (
@@ -577,33 +587,29 @@ const EmployerSettings = () => {
           </div>
         ) : (
           <div>
-            {/* Plan header */}
+            {/* Plan icon + name */}
             <div className="flex items-center gap-5 mb-6">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border flex-shrink-0 ${currentSub?.plan !== "free" ? "bg-[#f0f9f6] border-[#d1e8e3]" : "bg-gray-50 border-gray-100"}`}>
-                <Zap size={24} className={currentSub?.plan !== "free" ? "text-[#40b594]" : "text-gray-400"} />
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border flex-shrink-0 ${currentSub?.plan !== "free" ? "bg-[#f0f9f6] border-[#d1e8e3]" : "bg-gray-50 border-gray-100"}`}>
+                <Zap size={26} className={currentSub?.plan !== "free" ? "text-[#40b594]" : "text-gray-300"} />
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xl font-extrabold text-[#071a15] capitalize">{currentSub?.plan || "free"}</span>
-                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-lg border ${currentSub?.plan !== "free" ? "text-[#40b594] bg-[#f0f9f6] border-[#d1e8e3]" : "text-gray-400 bg-gray-50 border-gray-100"}`}>
-                    Active
-                  </span>
-                </div>
-                <p className="text-sm font-semibold text-[#6b7f79]">
-                  {planPrice[currentSub?.plan || "free"]}/month · {planLimits[currentSub?.plan || "free"]} job slot{planLimits[currentSub?.plan || "free"] > 1 ? "s" : ""}/month
+              <div>
+                <p className="text-2xl font-extrabold text-[#071a15] capitalize">{currentSub?.plan || "free"} Plan</p>
+                <p className="text-sm font-semibold text-[#6b7f79] mt-0.5">
+                  {planPrice[currentSub?.plan || "free"]}/month
                 </p>
               </div>
             </div>
 
-            {/* Billing dates — only for paid plans */}
-            {currentSub && currentSub.plan !== "free" && (
+            {/* Paid plan details */}
+            {currentSub && currentSub.plan !== "free" ? (
               <>
-                <div className="grid grid-cols-2 gap-3 mb-5">
+                {/* Start + End dates */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="bg-[#f8faf9] rounded-xl border border-gray-100 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6b7f79] mb-1">Started</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6b7f79] mb-1.5">Started</p>
                     <p className="text-sm font-extrabold text-[#071a15]">
                       {currentSub.billingCycleStart
-                        ? new Date(currentSub.billingCycleStart).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        ? new Date(currentSub.billingCycleStart).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
                         : "—"}
                     </p>
                   </div>
@@ -613,7 +619,7 @@ const EmployerSettings = () => {
                       : null;
                     return d !== null && d <= 3 ? "bg-amber-50 border-amber-100" : "bg-[#f8faf9] border-gray-100";
                   })()}`}>
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6b7f79] mb-1">Expires</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6b7f79] mb-1.5">Expires</p>
                     <p className={`text-sm font-extrabold ${(() => {
                       const d = currentSub.billingCycleEnd
                         ? Math.ceil((new Date(currentSub.billingCycleEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -621,129 +627,67 @@ const EmployerSettings = () => {
                       return d !== null && d <= 3 ? "text-amber-600" : "text-[#071a15]";
                     })()}`}>
                       {currentSub.billingCycleEnd
-                        ? new Date(currentSub.billingCycleEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        ? new Date(currentSub.billingCycleEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
                         : "—"}
                     </p>
                     {(() => {
                       const d = currentSub.billingCycleEnd
                         ? Math.ceil((new Date(currentSub.billingCycleEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
                         : null;
-                      return d !== null && d <= 3 && d >= 0
-                        ? <p className="text-[10px] font-bold text-amber-500 mt-0.5">{d} day{d !== 1 ? "s" : ""} left</p>
-                        : null;
+                      if (d !== null && d <= 3 && d >= 0)
+                        return <p className="text-[10px] font-bold text-amber-500 mt-1">⚠️ {d} day{d !== 1 ? "s" : ""} left</p>;
+                      if (d !== null && d > 3)
+                        return <p className="text-[10px] font-semibold text-[#6b7f79] mt-1">{d} days remaining</p>;
+                      return null;
                     })()}
                   </div>
                 </div>
 
-                {/* Usage bar */}
-                <div className="mb-5">
+                {/* Job slots usage */}
+                <div className="bg-[#f8faf9] rounded-xl border border-gray-100 p-4 mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-extrabold text-[#071a15]">Jobs used this month</p>
-                    <p className="text-sm font-bold text-[#6b7f79]">{currentSub.jobsPostedThisMonth} / {planLimits[currentSub.plan]}</p>
+                    <p className="text-sm font-extrabold text-[#071a15]">Job slots used this month</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-extrabold text-[#071a15]">{currentSub.jobsPostedThisMonth}</span>
+                      <span className="text-sm font-bold text-[#6b7f79]">/ {planLimits[currentSub.plan]}</span>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div className="h-2 rounded-full bg-[#40b594] transition-all" style={{ width: `${Math.min((currentSub.jobsPostedThisMonth / planLimits[currentSub.plan]) * 100, 100)}%` }} />
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden mb-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${currentSub.jobsPostedThisMonth >= planLimits[currentSub.plan] ? "bg-red-400" : "bg-[#40b594]"}`}
+                      style={{ width: `${Math.min((currentSub.jobsPostedThisMonth / planLimits[currentSub.plan]) * 100, 100)}%` }}
+                    />
                   </div>
-                  <p className="text-xs font-semibold text-[#9ab0aa] mt-1.5">Resets at the start of each billing cycle</p>
+                  <p className="text-xs font-semibold text-[#6b7f79]">
+                    {planLimits[currentSub.plan] - currentSub.jobsPostedThisMonth > 0
+                      ? `${planLimits[currentSub.plan] - currentSub.jobsPostedThisMonth} slot${planLimits[currentSub.plan] - currentSub.jobsPostedThisMonth !== 1 ? "s" : ""} remaining this month`
+                      : "No slots remaining — upgrade or wait for next cycle"}
+                  </p>
                 </div>
+
+                {/* Renew button only */}
+                <Link href="/subscription">
+                  <button className="flex items-center gap-2 px-5 py-2.5 bg-[#051612] hover:bg-[#0d2a23] text-white text-sm font-extrabold rounded-xl transition-all">
+                    Renew / Change Plan
+                  </button>
+                </Link>
+              </>
+            ) : (
+              <>
+                {/* Free plan */}
+                <div className="mb-6 rounded-xl border border-gray-100 bg-[#f8faf9] p-4">
+                  <p className="text-sm font-bold text-[#071a15]">You're on the Free plan</p>
+                  <p className="text-xs font-medium text-[#6b7f79] mt-1">
+                    1 job slot/month · Upgrade to post more jobs and reach more candidates.
+                  </p>
+                </div>
+                <Link href="/subscription">
+                  <button className="flex items-center gap-2 px-5 py-2.5 bg-[#051612] hover:bg-[#0d2a23] text-white text-sm font-extrabold rounded-xl transition-all">
+                    Upgrade Plan
+                  </button>
+                </Link>
               </>
             )}
-
-            {/* Action buttons */}
-            <div className="flex gap-3 flex-wrap">
-              <Link href="/subscription">
-                <button className="flex items-center gap-2 px-5 py-2.5 bg-[#051612] hover:bg-[#0d2a23] text-white text-sm font-extrabold rounded-xl transition-all">
-                  {currentSub?.plan === "free" ? "Upgrade Plan" : "Renew / Change Plan"}
-                </button>
-              </Link>
-              {currentSub && currentSub.plan !== "free" && (
-                <button
-                  onClick={async () => {
-                    if (!confirm("Cancel your membership? You'll be moved to the Free plan immediately.")) return;
-                    const res = await fetch("/api/payments/cancel", { method: "POST" });
-                    if (res.ok) {
-                      setCurrentSub((p: any) => ({ ...p, plan: "free", billingCycleEnd: null }));
-                      addToast("success", "Membership cancelled. You're now on the Free plan.");
-                    } else {
-                      addToast("error", "Failed to cancel. Please try again.");
-                    }
-                  }}
-                  className="flex items-center gap-2 px-5 py-2.5 border border-red-100 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-extrabold rounded-xl transition-all"
-                >
-                  <X size={14} /> Cancel Membership
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-
-    {/* Plan cards — click redirects to subscription page to pay */}
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-8 py-6">
-        <h2 className="text-lg font-extrabold text-[#071a15]">Available Plans</h2>
-        <p className="mt-0.5 text-sm font-medium text-[#4a5a55]">
-          Select a plan to go to the subscription page and complete payment via bank transfer
-        </p>
-      </div>
-      <div className="p-8">
-        {subLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map(i => <div key={i} className="h-48 bg-gray-100 rounded-2xl animate-pulse" />)}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {plans.map((plan) => {
-              const Icon = plan.icon;
-              const isCurrent = currentSub?.plan === plan.name;
-              const isHighlight = plan.highlight;
-              return (
-                <Link key={plan.name} href="/subscription">
-                  <div className={`relative flex flex-col rounded-2xl border overflow-hidden transition-all cursor-pointer h-full ${isCurrent ? "border-[#40b594] shadow-md" : isHighlight ? "border-[#0d2a23] bg-[#051612] hover:border-[#40b594]" : "border-gray-100 bg-white hover:border-[#40b594] hover:shadow-sm"}`}>
-                    {isCurrent && (
-                      <div className="absolute top-3 right-3 bg-[#40b594] text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full">Current</div>
-                    )}
-                    <div className="p-5 flex-1 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2.5 rounded-xl ${isHighlight ? "bg-[#133228]" : "bg-[#f0f9f6]"}`}>
-                          <Icon size={16} className="text-[#40b594]" />
-                        </div>
-                        <div>
-                          <p className={`text-sm font-extrabold ${isHighlight ? "text-white" : "text-[#071a15]"}`}>{plan.displayName}</p>
-                          <p className={`text-xs font-semibold ${isHighlight ? "text-gray-400" : "text-[#9ab0aa]"}`}>{planLimits[plan.name]} slot{planLimits[plan.name] > 1 ? "s" : ""}/mo</p>
-                        </div>
-                      </div>
-                      <div className="flex items-baseline gap-1">
-                        <span className={`text-2xl font-extrabold ${isHighlight ? "text-white" : "text-[#071a15]"}`}>${plan.price}</span>
-                        <span className={`text-xs font-semibold ${isHighlight ? "text-gray-400" : "text-[#6b7f79]"}`}>/mo</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {plan.features.slice(0, 3).map(f => (
-                          <div key={f} className="flex items-start gap-2">
-                            <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isHighlight ? "bg-[#133228]" : "bg-[#f0f9f6]"}`}>
-                              <Check size={8} className="text-[#40b594]" />
-                            </div>
-                            <span className={`text-xs font-medium leading-tight ${isHighlight ? "text-gray-300" : "text-[#4a5a55]"}`}>{f}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="px-5 pb-5">
-                      {isCurrent ? (
-                        <div className="w-full py-2 rounded-xl text-center text-xs font-extrabold text-[#40b594] bg-[#f0f9f6] border border-[#d1e8e3]">
-                          Current Plan
-                        </div>
-                      ) : (
-                        <div className={`w-full py-2 rounded-xl text-center text-xs font-extrabold ${isHighlight ? "bg-[#40b594] text-[#051612]" : "bg-[#051612] text-white"}`}>
-                          {planOrder[plan.name] > planOrder[currentSub?.plan || "free"] ? "Upgrade →" : plan.name === "free" ? "Downgrade" : "Switch Plan"}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
           </div>
         )}
       </div>

@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db } from "@/app/db";
 import { paymentRequests, subscriptions, notifications, users, adminAccounts, employerProfiles } from "@/app/db/schema";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import nodemailer from "nodemailer";
 
 async function sendEmail(to: string, subject: string, html: string) {
-  const t = nodemailer.createTransport({ service: "gmail", auth: { user: process.env.GMAIL_USER!, pass: process.env.GMAIL_APP_PASSWORD! } });
+  const t = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: process.env.GMAIL_USER!, pass: process.env.GMAIL_APP_PASSWORD! },
+  });
   await t.sendMail({ from: process.env.GMAIL_FROM || process.env.GMAIL_USER!, to, subject, html });
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const admin = await getCurrentAdmin();
     if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,7 +26,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const [request] = await db.select().from(paymentRequests).where(eq(paymentRequests.id, id)).limit(1);
     if (!request) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (request.status === "approved") return NextResponse.json({ error: "Already approved" }, { status: 400 });
+
+    // ++ Allow re-approving rejected — only block if already approved
+    if (request.status === "approved") {
+      return NextResponse.json({ error: "Already approved" }, { status: 400 });
+    }
+
     const [u] = await db.select().from(users).where(eq(users.id, request.employerId)).limit(1);
     const [profile] = await db.select().from(employerProfiles).where(eq(employerProfiles.userId, request.employerId)).limit(1);
 
@@ -30,17 +41,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       billingEnd.setMonth(billingEnd.getMonth() + 1);
       const plan = request.plan as "standard" | "premium";
 
-      // Upsert subscription
       const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.employerId, request.employerId)).limit(1);
       if (existing) {
-        await db.update(subscriptions).set({ plan, jobsPostedThisMonth: 0, billingCycleStart: now, billingCycleEnd: billingEnd, updatedAt: now }).where(eq(subscriptions.employerId, request.employerId));
+        await db.update(subscriptions)
+          .set({ plan, jobsPostedThisMonth: 0, billingCycleStart: now, billingCycleEnd: billingEnd, updatedAt: now })
+          .where(eq(subscriptions.employerId, request.employerId));
       } else {
-        await db.insert(subscriptions).values({ employerId: request.employerId, plan, jobsPostedThisMonth: 0, billingCycleStart: now, billingCycleEnd: billingEnd });
+        await db.insert(subscriptions).values({
+          employerId: request.employerId, plan, jobsPostedThisMonth: 0,
+          billingCycleStart: now, billingCycleEnd: billingEnd,
+        });
       }
 
-      await db.update(paymentRequests).set({ status: "approved", approvedAt: now, note: note || null, updatedAt: now }).where(eq(paymentRequests.id, id));
+      await db.update(paymentRequests)
+        .set({ status: "approved", approvedAt: now, note: note || null, updatedAt: now })
+        .where(eq(paymentRequests.id, id));
 
-      // Notify employer
       await db.insert(notifications).values({
         recipientId: request.employerId,
         type: "system",
@@ -68,7 +84,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
 
     } else if (action === "reject") {
-      await db.update(paymentRequests).set({ status: "rejected", note: note || null, updatedAt: new Date() }).where(eq(paymentRequests.id, id));
+      await db.update(paymentRequests)
+        .set({ status: "rejected", note: note || null, updatedAt: new Date() })
+        .where(eq(paymentRequests.id, id));
 
       await db.insert(notifications).values({
         recipientId: request.employerId,
@@ -94,12 +112,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
-    // Notify admin that they just actioned it (for audit trail)
+    // Admin audit notification
     await db.insert(notifications).values({
       recipientId: admin.id,
       type: "system",
       title: action === "approve" ? "✓ Payment Approved" : "✗ Payment Rejected",
-      description: `You ${action === "approve" ? "approved" : "rejected"} the payment from ${profile?.companyName || "an employer"} for ${request.plan} plan. Transaction: ${request.transactionNumber}.`,
+      description: `You ${action === "approve" ? "approved" : "rejected"} payment from ${profile?.companyName || "an employer"} for ${request.plan} plan. Transaction: ${request.transactionNumber}.`,
       link: "/admin_subscription",
       meta: { action: `admin_${action}`, transactionNumber: request.transactionNumber } as Record<string, unknown>,
     });
@@ -111,21 +129,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-// Admin can also cancel a subscription directly
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const admin = await getCurrentAdmin();
     if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { id } = await params; // this is the subscription employerId
+    const { id } = await params; // employerId
+
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.employerId, id)).limit(1);
     if (!sub) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const oldPlan = sub.plan;
-    await db.update(subscriptions).set({ plan: "free", billingCycleEnd: null, updatedAt: new Date() }).where(eq(subscriptions.employerId, id));
 
-    const [profile] = await db.select().from(employerProfiles).where(eq(employerProfiles.userId, id)).limit(1);
+    // Downgrade to free
+    await db.update(subscriptions)
+      .set({ plan: "free", billingCycleEnd: null, updatedAt: new Date() })
+      .where(eq(subscriptions.employerId, id));
 
+    // ++ Mark latest approved payment as cancelled so three-dot reappears
+    const [latestApproved] = await db
+      .select()
+      .from(paymentRequests)
+      .where(and(eq(paymentRequests.employerId, id), eq(paymentRequests.status, "approved")))
+      .orderBy(desc(paymentRequests.createdAt))
+      .limit(1);
+
+    if (latestApproved) {
+      await db.update(paymentRequests)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(eq(paymentRequests.id, latestApproved.id));
+    }
+
+    // Notify employer
     await db.insert(notifications).values({
       recipientId: id,
       type: "system",

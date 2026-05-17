@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/app/db";
-import { jobs, employerProfiles } from "@/app/db/schema";
+import { jobs, employerProfiles, subscriptions } from "@/app/db/schema";
 import { cookies } from "next/headers";
 import { createHash } from "crypto";
 import { and, gt } from "drizzle-orm";
@@ -29,6 +29,8 @@ async function getCurrentUser() {
     return null;
   }
 }
+
+const planLimits: Record<string, number> = { free: 1, standard: 3, premium: 7 };
 
 export async function GET(
   req: Request,
@@ -125,9 +127,61 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // ++ LIMIT CHECK — only when publishing draft → active
+    const isPublishing = job.status !== "active" && body.status === "active";
+
+    if (isPublishing) {
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.employerId, user.id))
+        .limit(1);
+
+      const plan = sub?.plan ?? "free";
+      const isExpired = sub?.billingCycleEnd
+        ? new Date(sub.billingCycleEnd) < new Date()
+        : false;
+      const effectivePlan = isExpired ? "free" : plan;
+      const effectiveLimit = planLimits[effectivePlan] ?? 1;
+      const effectiveUsed = sub?.jobsPostedThisMonth ?? 0;
+
+      if (effectiveUsed >= effectiveLimit) {
+        return NextResponse.json(
+          {
+            error: `You've reached your monthly job post limit (${effectiveLimit} post${effectiveLimit !== 1 ? "s" : ""} for the ${effectivePlan} plan). ${effectivePlan === "free" ? "Upgrade your plan to post more jobs." : "Wait for next billing cycle or upgrade your plan."}`,
+            limitReached: true,
+            plan: effectivePlan,
+            limit: effectiveLimit,
+            used: effectiveUsed,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Increment jobsPostedThisMonth
+      if (sub) {
+        await db
+          .update(subscriptions)
+          .set({ jobsPostedThisMonth: effectiveUsed + 1, updatedAt: new Date() })
+          .where(eq(subscriptions.employerId, user.id));
+      } else {
+        await db.insert(subscriptions).values({
+          employerId: user.id,
+          plan: "free",
+          jobsPostedThisMonth: 1,
+          billingCycleStart: new Date(),
+        });
+      }
+    }
+
+    // Apply the update
     const [updated] = await db
       .update(jobs)
-      .set({ ...body, updatedAt: new Date() })
+      .set({
+        ...body,
+        postedAt: isPublishing ? new Date() : job.postedAt,
+        updatedAt: new Date(),
+      })
       .where(eq(jobs.id, jobId))
       .returning();
 
@@ -167,8 +221,6 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Soft delete: set to "draft" — hides from dashboard Recent Jobs
-    // but can be restored to "active" via the Drafts panel
     await db
       .update(jobs)
       .set({ status: "draft", updatedAt: new Date() })
