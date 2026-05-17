@@ -80,7 +80,6 @@ const ResetPasswordPage = () => {
                 </p>
               </div>
 
-<<<<<<< HEAD
               <form className="space-y-4" onSubmit={onSubmit}>
                 <div className="space-y-1.5">
                   <label className="ml-1 block text-sm font-semibold text-[#00a37b]">New password</label>
@@ -132,14 +131,6 @@ const ResetPasswordPage = () => {
                   {loading ? "Resetting..." : "Reset password"}
                 </button>
               </form>
-=======
-              <Link
-                href="/login"
-                className="inline-flex w-full items-center justify-center rounded-lg bg-[#00a37b] py-3 text-sm font-semibold text-white shadow-md shadow-[#00a37b]/20 transition-all hover:bg-[#008f6c]"
-              >
-                Return to login
-              </Link>
->>>>>>> 575dc888b1154ca76e5592c72f73c243880d2f1b
             </div>
           </div>
         </div>
