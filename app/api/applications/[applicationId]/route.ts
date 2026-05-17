@@ -6,17 +6,17 @@ import { getCurrentUser } from "@/lib/auth";
 
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ applicationId: string }> }
 ) {
   const user = await getCurrentUser("auth");
   if (!user || user.role !== "job_seeker") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
-
+  
+  const { applicationId } = await params;
+  
   await db
     .update(jobApplications)
-    .set({ status: "pending", updatedAt: new Date() }) // Move back to Applied
-    .where(and(eq(jobApplications.id, id), eq(jobApplications.jobSeekerId, user.id)));
-
+    .set({ status: "pending", updatedAt: new Date() })
+    .where(and(eq(jobApplications.id, applicationId), eq(jobApplications.jobSeekerId, user.id)));
+  
   return NextResponse.json({ success: true });
 }
