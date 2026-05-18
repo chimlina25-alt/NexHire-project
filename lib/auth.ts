@@ -38,7 +38,6 @@ export async function createSession(userId: string, type: "auth" | "reset" = "au
     sameSite: "lax",
     path: "/",
     expires: expiresAt,
-    domain: process.env.NODE_ENV === "production" ? ".vercel.app" : undefined, 
   });
 }
 
